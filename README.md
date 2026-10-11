@@ -1,1 +1,31 @@
-# CS-499-Computer-Science-Capstone
+# CS 499 Computer Science Capstone ePortfolio
+
+## Alondra Paulino Santos
+
+Welcome to my Computer Science Capstone ePortfolio. This portfolio documents my growth as a computer science student and demonstrates skills in software design and engineering, algorithms and data structures, and databases.
+
+## Code Review
+
+My code-review video examines the original versions of three selected course artifacts. In the review, I describe their existing functionality, analyze important strengths and weaknesses, and explain the enhancements planned for each category.
+
+**[Watch the CS 499 Capstone Code Review on YouTube](https://youtu.be/JbB-MOt_yLA)**
+
+The video is unlisted, so it can be viewed by anyone who has the link without appearing in public YouTube searches.
+
+## Portfolio Categories
+
+### Software Design and Engineering
+
+This section will present the enhanced CS 465 Travlr Getaways full-stack application, its supporting documentation, and the accompanying enhancement narrative.
+
+### Algorithms and Data Structures
+
+This section will present the enhanced CS 300 course-planning application, its original and enhanced source code, and the accompanying enhancement narrative.
+
+### Databases
+
+This section will present the enhanced CS 340 Grazioso Salvare animal-rescue dashboard, database evidence, and the accompanying enhancement narrative.
+
+## About This Portfolio
+
+The completed portfolio will include the original and enhanced artifacts, supporting narratives, implementation and testing evidence, and a professional self-assessment connecting the work to the five CS 499 course outcomes.

@@ -16,7 +16,9 @@ The video is unlisted, so it can be viewed by anyone who has the link without ap
 
 ### Software Design and Engineering
 
-This section will present the enhanced CS 465 Travlr Getaways full-stack application, its supporting documentation, and the accompanying enhancement narrative.
+The completed CS 465 Travlr Getaways enhancement demonstrates full-stack software design and engineering through stronger validation, authentication and authorization, secure API behavior, inquiry management, error handling, and automated testing.
+
+**[View Enhancement One and download the complete evidence package](./enhancement-one/)**
 
 ### Algorithms and Data Structures
 

@@ -22,7 +22,9 @@ The completed CS 465 Travlr Getaways enhancement demonstrates full-stack softwar
 
 ### Algorithms and Data Structures
 
-This section will present the enhanced CS 300 course-planning application, its original and enhanced source code, and the accompanying enhancement narrative.
+The completed CS 300 course-planning enhancement demonstrates graph modeling, a custom hash table, Kahn's topological-sort algorithm, defensive data validation, cycle detection, and runtime-safety testing. The implemented course-order algorithm runs in O(V + E) time and uses O(V + E) additional space.
+
+**[View Enhancement Two and download the complete evidence package](./enhancement-two/)**
 
 ### Databases
 

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CS 499 Enhancement Two: Algorithms and Data Structures">
+  <title>Enhancement Two | CS 499 Capstone</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="container">
+      <p class="eyebrow">CS 499 Computer Science Capstone</p>
+      <h1>Enhancement Two</h1>
+      <p class="intro">Algorithms and Data Structures</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section aria-labelledby="artifact">
+      <h2 id="artifact">CS 300 Course Planning Assistant</h2>
+      <p>The enhanced C++ application combines a custom hash table with a directed prerequisite graph. Kahn's topological-sort algorithm uses an adjacency list, incoming-edge counts, and a queue to generate a course order in which each prerequisite appears before its dependent courses.</p>
+      <p>Graph construction and traversal require <strong>O(V + E) time</strong> and <strong>O(V + E) additional space</strong>, where V is the number of courses and E is the number of prerequisite relationships.</p>
+      <p>The enhancement also provides line-specific validation for malformed records, duplicate courses, repeated prerequisite relationships, missing prerequisites, self-dependencies, and circular dependencies. Strict compilation and sanitizer testing provide evidence of implementation quality and runtime safety.</p>
+    </section>
+
+    <section aria-labelledby="downloads">
+      <h2 id="downloads">Evidence and Downloads</h2>
+      <div class="cards">
+        <article>
+          <h3>Enhancement Narrative</h3>
+          <p>Design decisions, Big-O analysis, course-outcome connections, reflection, and embedded verification evidence.</p>
+          <p><a class="button" href="CS300-Final-Narrative.zip">Download Narrative</a></p>
+        </article>
+        <article>
+          <h3>Source Code and Test Data</h3>
+          <p>Original and enhanced C++ files plus valid, cyclic, invalid-prerequisite, and malformed CSV datasets.</p>
+          <p><a class="button" href="CS300-Original-and-Enhanced-Source.zip">Download Source</a></p>
+        </article>
+        <article>
+          <h3>Testing Evidence</h3>
+          <p>Strict compilation, valid ordering, validation, cycle detection, and sanitizer screenshots.</p>
+          <p><a class="button" href="CS300-Screenshots-and-Test-Evidence.zip">Download Evidence</a></p>
+        </article>
+      </div>
+    </section>
+
+    <p><a class="button" href="../">Return to Portfolio</a></p>
+  </main>
+
+  <footer>
+    <div class="container">© Alondra Paulino Santos · CS 499 Computer Science Capstone</div>
+  </footer>
+</body>
+</html>

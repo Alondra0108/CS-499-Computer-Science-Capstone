@@ -40,5 +40,8 @@ h3 { color: var(--blue); }
 .button:hover, .button:focus { background: var(--navy); }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .cards article { padding: 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--light); }
+.reading { max-width: 900px; }
+.reading h3 { margin-top: 32px; }
+.reading .button { margin: 0 8px 8px 0; }
 footer { padding: 28px 0; color: #fff; background: var(--navy); }
 @media (max-width: 760px) { .cards { grid-template-columns: 1fr; } .hero { padding: 52px 0; } }

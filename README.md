@@ -4,6 +4,12 @@
 
 Welcome to my Computer Science Capstone ePortfolio. This portfolio documents my growth as a computer science student and demonstrates skills in software design and engineering, algorithms and data structures, and databases.
 
+## Professional Self Assessment
+
+The professional self-assessment introduces the portfolio, reflects on my growth through the Computer Science program, and explains how the three enhanced artifacts collectively demonstrate all five CS 499 course outcomes.
+
+**[Read or download the Professional Self Assessment](./self-assessment/)**
+
 ## Code Review
 
 My code-review video examines the original versions of three selected course artifacts. In the review, I describe their existing functionality, analyze important strengths and weaknesses, and explain the enhancements planned for each category.
@@ -28,8 +34,10 @@ The completed CS 300 course-planning enhancement demonstrates graph modeling, a 
 
 ### Databases
 
-This section will present the enhanced CS 340 Grazioso Salvare animal-rescue dashboard, database evidence, and the accompanying enhancement narrative.
+The completed CS 340 Grazioso Salvare enhancement demonstrates secure data access, server-side pagination and aggregation, deterministic sorting, automated testing, and measured MongoDB index performance.
+
+**[View Enhancement Three and download the complete evidence package](./enhancement-three/)**
 
 ## About This Portfolio
 
-The completed portfolio will include the original and enhanced artifacts, supporting narratives, implementation and testing evidence, and a professional self-assessment connecting the work to the five CS 499 course outcomes.
+This completed portfolio includes the original and enhanced artifacts, supporting narratives, implementation and testing evidence, the code review, and a professional self-assessment connecting the work to the five CS 499 course outcomes.

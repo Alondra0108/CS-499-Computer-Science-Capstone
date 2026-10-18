@@ -45,3 +45,21 @@ h3 { color: var(--blue); }
 .reading .button { margin: 0 8px 8px 0; }
 footer { padding: 28px 0; color: #fff; background: var(--navy); }
 @media (max-width: 760px) { .cards { grid-template-columns: 1fr; } .hero { padding: 52px 0; } }
+
+/* Readable artifact pages and evidence. */
+nav { margin-bottom: 32px; }
+nav a { display: inline-block; padding: 6px 2px; }
+a { color: var(--blue); overflow-wrap: anywhere; }
+a:focus-visible, summary:focus-visible { outline: 3px solid #c86400; outline-offset: 4px; }
+.evidence-image { display: block; max-width: 100%; height: auto; border: 1px solid var(--border); }
+figure { margin: 32px 0; }
+figcaption { margin-top: 8px; color: #435269; }
+.table-scroll { overflow-x: auto; margin: 24px 0; }
+table { border-collapse: collapse; width: 100%; }
+td, th { border: 1px solid var(--border); padding: 12px; text-align: left; vertical-align: top; }
+th { background: var(--light); }
+details { border: 1px solid var(--border); border-radius: 8px; margin: 12px 0; }
+summary { cursor: pointer; padding: 14px; overflow-wrap: anywhere; font-weight: 600; }
+pre { overflow-x: auto; margin: 0; padding: 20px; background: var(--light); font-size: 14px; line-height: 1.5; }
+.skip-link { position: absolute; left: -10000px; }
+.skip-link:focus { left: 16px; top: 16px; padding: 12px; background: white; z-index: 10; }

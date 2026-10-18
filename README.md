@@ -41,3 +41,8 @@ The completed CS 340 Grazioso Salvare enhancement demonstrates secure data acces
 ## About This Portfolio
 
 This completed portfolio includes the original and enhanced artifacts, supporting narratives, implementation and testing evidence, the code review, and a professional self-assessment connecting the work to the five CS 499 course outcomes.
+
+## Review Materials
+
+Each enhancement page provides the complete narrative, browsable original and enhanced source code, and an evidence gallery, alongside the original downloads.
+

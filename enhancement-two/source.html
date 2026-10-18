@@ -1,0 +1,1489 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Source Code | CS 499 Capstone</title><link rel="stylesheet" href="../styles.css"></head>
+<body><a class="skip-link" href="#content">Skip to content</a><header class="hero"><div class="container"><p class="eyebrow">CS 499 Computer Science Capstone</p><h1>Source Code</h1><p class="intro">Algorithms and Data Structures</p></div></header>
+<main id="content" class="container reading"><nav aria-label="Portfolio navigation"><a href="../">Portfolio home</a> · <a href="./">Enhancement overview</a> · <a href="narrative.html">Narrative</a> · <a href="source.html">Source code</a> · <a href="evidence.html">Evidence</a></nav><h2>Original and Enhanced Source Code</h2><p>Expand a file to read its source. The complete archive retains the original directory structure and supporting files.</p><p><a class="button" href="CS300-Original-and-Enhanced-Source.zip">Download complete source</a></p><section><h2>Original artifact</h2><details><summary>ProjectTwoCS300.cpp</summary><pre><code>﻿// ProjectTwo.cpp
+// Alondra Paulino Santos
+// CS 300 – Project Two (Advising Assistance Program)
+// Data structure: Hash Table (chaining), per Project One recommendation.
+// Notes:
+//  - Single-file CLI program (no external headers/parsers).
+//  - Implements multi-pass validation, line-numbered error reporting,
+//    cycle detection, adaptive sorting, robust menu with help, and basic timing.
+
+#include &lt;algorithm&gt;
+#include &lt;chrono&gt;
+#include &lt;cctype&gt;
+#include &lt;fstream&gt;
+#include &lt;iostream&gt;
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+#include &lt;unordered_map&gt;
+#include &lt;unordered_set&gt;
+#include &lt;vector&gt;
+
+using std::cin;
+using std::cout;
+using std::endl;
+using std::getline;
+using std::ifstream;
+using std::size_t;
+using std::string;
+using std::unordered_map;
+using std::unordered_set;
+using std::vector;
+
+// Domain Model
+struct Course {
+    string number;               // normalized (trimmed, uppercased) e.g., &quot;CSCI200&quot;
+    string title;                // course title
+    vector&lt;string&gt; prereqs;      // normalized prerequisite course numbers
+};
+
+// Utility: trimming &amp; normalization
+static inline string ltrim(const string&amp; s) {
+    size_t i = 0;
+    while (i &lt; s.size() &amp;&amp; std::isspace(static_cast&lt;unsigned char&gt;(s[i]))) ++i;
+    return s.substr(i);
+}
+static inline string rtrim(const string&amp; s) {
+    if (s.empty()) return s;
+    size_t i = s.size();
+    while (i &gt; 0 &amp;&amp; std::isspace(static_cast&lt;unsigned char&gt;(s[i - 1]))) --i;
+    return s.substr(0, i);
+}
+static inline string trim(const string&amp; s) { return rtrim(ltrim(s)); }
+
+// Normalize course codes so comparisons are consistent (e.g., &quot;csci200 &quot; -&gt; &quot;CSCI200&quot;).
+static inline string NormalizeCourse(const string&amp; raw) {
+    string t = trim(raw);
+    for (char&amp; c : t) c = static_cast&lt;char&gt;(std::toupper(static_cast&lt;unsigned char&gt;(c)));
+    return t;
+}
+/* Reviewer note (Normalization):
+   Normalize all course codes (trim + uppercase) before any hashing/lookup,
+   so user input like &quot;csci 200&quot; matches &quot;CSCI200&quot; in the data. Prevents subtle
+   mismatches and makes the rest of the pipeline stable. */
+
+   // -------------------------------
+   // Hash Table (chaining)
+   // -------------------------------
+struct Node {
+    Course data;
+    Node* next = nullptr;
+    explicit Node(const Course&amp; c) : data(c) {}
+};
+
+class HashTable {
+public:
+    explicit HashTable(size_t tableSize = 179) : tableSize_(tableSize), buckets_(tableSize_, nullptr) {}
+
+    // Insert returns false on duplicate course number; otherwise true.
+    bool Insert(const Course&amp; c) {
+        size_t idx = Hash(c.number);
+        // Check duplicate in chain
+        for (Node* cur = buckets_[idx]; cur != nullptr; cur = cur-&gt;next) {
+            if (cur-&gt;data.number == c.number) return false;
+        }
+        Node* n = new Node(c);
+        n-&gt;next = buckets_[idx];
+        buckets_[idx] = n;
+        return true;
+    }
+
+    // Search returns pointer to Course if found; otherwise nullptr.
+    const Course* Search(const string&amp; courseNumber) const {
+        string key = NormalizeCourse(courseNumber);
+        size_t idx = Hash(key);
+        for (Node* cur = buckets_[idx]; cur != nullptr; cur = cur-&gt;next) {
+            if (cur-&gt;data.number == key) return &amp;cur-&gt;data;
+        }
+        return nullptr;
+    }
+
+    // Gather all courses to a vector (no side effects on table).
+    vector&lt;Course&gt; ToVector() const {
+        vector&lt;Course&gt; out;
+        out.reserve(256);
+        for (Node* head : buckets_) {
+            for (Node* cur = head; cur != nullptr; cur = cur-&gt;next) {
+                out.push_back(cur-&gt;data);
+            }
+        }
+        return out;
+    }
+
+    // Gather and return courses sorted alphanumerically by course number.
+    vector&lt;Course&gt; ToVectorSorted() const {
+        vector&lt;Course&gt; v = ToVector();
+
+        // Adaptive choice: insertion sort for tiny sets, std::sort otherwise.
+        if (v.size() &lt; 50) {
+            for (size_t i = 1; i &lt; v.size(); ++i) {
+                Course key = v[i];
+                size_t j = i;
+                while (j &gt; 0 &amp;&amp; v[j - 1].number &gt; key.number) {
+                    v[j] = v[j - 1];
+                    --j;
+                }
+                v[j] = key;
+            }
+        }
+        else {
+            std::sort(v.begin(), v.end(), [](const Course&amp; a, const Course&amp; b) {
+                return a.number &lt; b.number;
+                });
+        }
+        return v;
+    }
+    /* Reviewer note (Hash + Sorting):
+       - Table uses chaining with a prime bucket count to keep average inserts/lookups ~O(1).
+       - Sorting is adaptive: insertion sort for small N, std::sort for larger lists.
+         This keeps the implementation simple but still responsive for typical inputs. */
+
+    ~HashTable() {
+        for (Node* head : buckets_) {
+            while (head) {
+                Node* nxt = head-&gt;next;
+                delete head;
+                head = nxt;
+            }
+        }
+    }
+
+private:
+    // Simple 31-based rolling hash for strings; mod table size (prime recommended).
+    size_t Hash(const string&amp; key) const {
+        long long sum = 0;
+        for (unsigned char ch : key) sum = sum * 31 + ch;
+        if (sum &lt; 0) sum = -sum;
+        return static_cast&lt;size_t&gt;(sum) % tableSize_;
+    }
+
+    size_t tableSize_;
+    vector&lt;Node*&gt; buckets_;
+};
+
+// Load/Validation Reporting
+struct LoadIssue {
+    size_t lineNo{};
+    string type;   // e.g., &quot;MissingField&quot;, &quot;Duplicate&quot;, &quot;UnknownPrereq&quot;, &quot;SelfPrereq&quot;, &quot;Cycle&quot;
+    string detail; // human-readable
+};
+
+struct LoadResultSummary {
+    size_t linesRead = 0;
+    size_t parsedCourses = 0;
+    size_t inserted = 0;
+    size_t duplicates = 0;
+    size_t unknownPrereqs = 0;
+    size_t selfPrereqs = 0;
+    size_t cycles = 0;
+    vector&lt;LoadIssue&gt; issues;
+};
+
+// Pass 1: Parse CSV lines and populate a temporary map (detect duplicates, missing fields)
+static bool ParseLineCSV(const string&amp; line, size_t lineNo,
+    string&amp; outNumber, string&amp; outTitle, vector&lt;string&gt;&amp; outPrereqs,
+    LoadResultSummary&amp; summary) {
+    summary.linesRead++;
+
+    // Skip empty/comment-only lines gracefully.
+    string trimmed = trim(line);
+    if (trimmed.empty()) return false;
+
+    // Basic CSV split on commas (titles have no commas per project input).
+    std::stringstream ss(line);
+    string token;
+    vector&lt;string&gt; tokens;
+    while (getline(ss, token, &#x27;,&#x27;)) tokens.push_back(token);
+
+    // Need at least courseNumber and title.
+    if (tokens.size() &lt; 2) {
+        summary.issues.push_back({ lineNo, &quot;MissingField&quot;,
+                                  &quot;Missing course number or title&quot; });
+        return false;
+    }
+
+    outNumber = NormalizeCourse(tokens[0]);
+    outTitle = trim(tokens[1]);
+    outPrereqs.clear();
+
+    // Optional prereqs start at index 2 (ignore blanks).
+    for (size_t i = 2; i &lt; tokens.size(); ++i) {
+        string p = NormalizeCourse(tokens[i]);
+        if (!p.empty()) outPrereqs.push_back(p);
+    }
+
+    // Basic field checks
+    if (outNumber.empty()) {
+        summary.issues.push_back({ lineNo, &quot;MissingField&quot;, &quot;Empty course number&quot; });
+        return false;
+    }
+    if (outTitle.empty()) {
+        summary.issues.push_back({ lineNo, &quot;MissingField&quot;,
+                                  &quot;Empty course title for &quot; + outNumber });
+        return false;
+    }
+    return true;
+}
+/* Reviewer note (Pass 1):
+   First pass reads/normalizes each CSV line and records precise line numbers
+   for any missing fields/duplicates. This makes bad rows easy to track down. 
+   */
+
+   // Pass 2A: Validate prereqs exist; strip unknown prereqs; track self-prereqs
+static void ValidatePrereqs(unordered_map&lt;string, Course&gt;&amp; temp,
+    LoadResultSummary&amp; summary) {
+    for (auto&amp; kv : temp) {
+        Course&amp; c = kv.second;
+        vector&lt;string&gt; keep;
+        for (const string&amp; p : c.prereqs) {
+            if (p == c.number) {
+                summary.selfPrereqs++;
+                summary.issues.push_back({ 0, &quot;SelfPrereq&quot;,
+                                          &quot;Self prerequisite removed: &quot; + c.number });
+                continue; // drop self-edge
+            }
+            if (temp.find(p) == temp.end()) {
+                summary.unknownPrereqs++;
+                summary.issues.push_back({ 0, &quot;UnknownPrereq&quot;,
+                                          &quot;Unknown prereq &#x27;&quot; + p + &quot;&#x27; for &quot; + c.number });
+                continue; // drop unknown
+            }
+            keep.push_back(p);
+        }
+        c.prereqs.swap(keep);
+    }
+}
+/* Reviewer note (Pass 2A):
+   Cleanup pass removes self-edges and unknown prerequisites. It also counts and
+   logs what was dropped so the load summary clearly explains the changes. 
+   */
+
+   // Pass 2B: Cycle detection (DFS with color marking). Skips courses that are in cycles.
+enum Color { WHITE = 0, GRAY = 1, BLACK = 2 };
+
+static bool DFSDetect(const string&amp; u,
+    unordered_map&lt;string, Color&gt;&amp; color,
+    unordered_map&lt;string, string&gt;&amp; parent,
+    const unordered_map&lt;string, Course&gt;&amp; temp,
+    vector&lt;string&gt;&amp; cyclePath) {
+    color[u] = GRAY;
+    auto it = temp.find(u);
+    if (it != temp.end()) {
+        for (const string&amp; v : it-&gt;second.prereqs) {
+            if (color[v] == WHITE) {
+                parent[v] = u;
+                if (DFSDetect(v, color, parent, temp, cyclePath)) return true;
+            }
+            else if (color[v] == GRAY) {
+                // Found back-edge; reconstruct path v -&gt; ... -&gt; u -&gt; v
+                cyclePath.clear();
+                string x = u;
+                cyclePath.push_back(v);
+                while (x != v &amp;&amp; !x.empty()) {
+                    cyclePath.push_back(x);
+                    x = parent.count(x) ? parent[x] : string();
+                }
+                cyclePath.push_back(v);
+                std::reverse(cyclePath.begin(), cyclePath.end());
+                return true;
+            }
+        }
+    }
+    color[u] = BLACK;
+    return false;
+}
+/* Reviewer note (Cycle detection core):
+   This is the circular-dependency detector (DFS + WHITE/GRAY/BLACK). A back-edge
+   to GRAY means we found a loop; I rebuild the exact path into cyclePath so the
+   summary can show something like &quot;A -&gt; B -&gt; C -&gt; A&quot;. */
+
+static unordered_set&lt;string&gt; DetectCyclesAndMark(const unordered_map&lt;string, Course&gt;&amp; temp,
+    LoadResultSummary&amp; summary) {
+    unordered_set&lt;string&gt; inCycle;
+    unordered_map&lt;string, Color&gt; color;
+    unordered_map&lt;string, string&gt; parent;
+    for (const auto&amp; kv : temp) color[kv.first] = WHITE;
+
+    for (const auto&amp; kv : temp) {
+        const string&amp; start = kv.first;
+        if (color[start] != WHITE) continue;
+        vector&lt;string&gt; cyclePath;
+        if (DFSDetect(start, color, parent, temp, cyclePath)) {
+            summary.cycles++;
+            // Mark every node in the cycle; add issue with readable path.
+            string pathStr;
+            for (size_t i = 0; i &lt; cyclePath.size(); ++i) {
+                if (i) pathStr += &quot; -&gt; &quot;;
+                pathStr += cyclePath[i];
+                inCycle.insert(cyclePath[i]);
+            }
+            summary.issues.push_back({ 0, &quot;Cycle&quot;, &quot;Cycle detected: &quot; + pathStr });
+        }
+    }
+    return inCycle;
+}
+/* Reviewer note (Pass 2B summary):
+   If a cycle is detected, marks all members so they don’t get inserted.
+   The load summary prints the readable cycle path for transparency. */
+
+   // Insert validated (and cycle-free) courses into the hash table
+static void InsertValidated(const unordered_map&lt;string, Course&gt;&amp; temp,
+    const unordered_set&lt;string&gt;&amp; inCycle,
+    HashTable&amp; table,
+    LoadResultSummary&amp; summary) {
+    for (const auto&amp; kv : temp) {
+        const string&amp; num = kv.first;
+        const Course&amp; c = kv.second;
+        if (inCycle.count(num)) continue; // skip cycle members
+        if (table.Insert(c)) {
+            summary.inserted++;
+        }
+        else {
+            summary.duplicates++; // duplicate in final table (defensive)
+        }
+    }
+}
+/* Reviewer note (Insertion gate):
+   Final insert step honors the cycle set so only valid, cycle-free courses
+   make it into the hash table. Duplicates are guarded as a last resort. */
+
+   // File Loader Orchestrator (multi-pass, timed)
+static LoadResultSummary LoadCoursesFromFile(const string&amp; filePath, HashTable&amp; table) {
+    LoadResultSummary summary;
+    unordered_map&lt;string, Course&gt; temp; // number -&gt; Course
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    ifstream fin(filePath);
+    if (!fin.is_open()) {
+        summary.issues.push_back({ 0, &quot;FileError&quot;, &quot;Cannot open file: &quot; + filePath });
+        return summary;
+    }
+
+    // Pass 1: parse/normalize; detect duplicates/missing fields with line numbers.
+    string line;
+    size_t lineNo = 0;
+    while (getline(fin, line)) {
+        ++lineNo;
+        string number, title;
+        vector&lt;string&gt; prereqs;
+        if (!ParseLineCSV(line, lineNo, number, title, prereqs, summary)) {
+            // parsing error already recorded (with line number)
+            continue;
+        }
+        // Duplicate header detection within the same load.
+        if (temp.find(number) != temp.end()) {
+            summary.duplicates++;
+            summary.issues.push_back({ lineNo, &quot;Duplicate&quot;, &quot;Duplicate course number: &quot; + number });
+            continue;
+        }
+        Course c;
+        c.number = number;
+        c.title = title;
+        c.prereqs = prereqs;
+        temp[number] = std::move(c);
+        summary.parsedCourses++;
+    }
+    fin.close();
+
+    // Pass 2A: prerequisite existence + self-prereq pruning; track unknowns/selfs.
+    ValidatePrereqs(temp, summary);
+
+    // Pass 2B: detect cycles and skip cycle members from insertion.
+    unordered_set&lt;string&gt; inCycle = DetectCyclesAndMark(temp, summary);
+
+    // Insert into hash table (duplicates guarded).
+    InsertValidated(temp, inCycle, table, summary);
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto ms = std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(t1 - t0).count();
+    summary.issues.push_back({ 0, &quot;Timing&quot;, &quot;Load completed in &quot; + std::to_string(ms) + &quot; ms&quot; });
+    return summary;
+}
+/* Reviewer note (Loader orchestration):
+   The loader runs in clear passes (Parse → Validate → Detect cycles → Insert),
+   then logs a one-shot summary including timing so performance can be discussed. 
+   */
+
+   // Presentation helpers (UI)
+static void PrintLoadSummary(const LoadResultSummary&amp; s) {
+    cout &lt;&lt; &quot;\n=== Load Summary ===\n&quot;;
+    cout &lt;&lt; &quot;Lines read:        &quot; &lt;&lt; s.linesRead &lt;&lt; &quot;\n&quot;;
+    cout &lt;&lt; &quot;Courses parsed:    &quot; &lt;&lt; s.parsedCourses &lt;&lt; &quot;\n&quot;;
+    cout &lt;&lt; &quot;Inserted:          &quot; &lt;&lt; s.inserted &lt;&lt; &quot;\n&quot;;
+    cout &lt;&lt; &quot;Duplicates:        &quot; &lt;&lt; s.duplicates &lt;&lt; &quot;\n&quot;;
+    cout &lt;&lt; &quot;Unknown prereqs:   &quot; &lt;&lt; s.unknownPrereqs &lt;&lt; &quot;\n&quot;;
+    cout &lt;&lt; &quot;Self prereqs:      &quot; &lt;&lt; s.selfPrereqs &lt;&lt; &quot;\n&quot;;
+    cout &lt;&lt; &quot;Cycles detected:   &quot; &lt;&lt; s.cycles &lt;&lt; &quot;\n&quot;;
+    for (const auto&amp; issue : s.issues) {
+        // Only show detailed validation/timing/cycle logs; lineNo 0 indicates non-line-specific.
+        if (issue.type == &quot;Timing&quot;)
+            cout &lt;&lt; &quot;* &quot; &lt;&lt; issue.detail &lt;&lt; &quot;\n&quot;;
+        else if (issue.lineNo &gt; 0)
+            cout &lt;&lt; &quot;* [line &quot; &lt;&lt; issue.lineNo &lt;&lt; &quot;] &quot; &lt;&lt; issue.type &lt;&lt; &quot;: &quot; &lt;&lt; issue.detail &lt;&lt; &quot;\n&quot;;
+        else
+            cout &lt;&lt; &quot;* &quot; &lt;&lt; issue.type &lt;&lt; &quot;: &quot; &lt;&lt; issue.detail &lt;&lt; &quot;\n&quot;;
+    }
+    cout &lt;&lt; &quot;====================\n\n&quot;;
+}
+/* Reviewer note (UX summary):
+   All file and validation issues get aggregated into one summary so the grader
+   can see exactly what happened during load (including timing and cycles). */
+
+static void PrintHelp() {
+    cout &lt;&lt; &quot;\nHelp:\n&quot;
+        &quot;1. Load Data Structure  - Read a CSV file and load courses into the hash table.\n&quot;
+        &quot;2. Print Course List    - Show all courses alphanumerically (CSCI and MATH).\n&quot;
+        &quot;3. Print Course         - Enter a course number to see its title and prerequisites (with titles).\n&quot;
+        &quot;9. Exit                 - Quit the program.\n&quot;
+        &quot;Other: &#x27;H&#x27; or &#x27;?&#x27; shows this help. Input is case-insensitive.\n\n&quot;;
+}
+
+// Show all courses alphanumerically without mutating the hash table.
+static void PrintAll(const HashTable&amp; table) {
+    auto t0 = std::chrono::high_resolution_clock::now();
+    vector&lt;Course&gt; v = table.ToVectorSorted();
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto ms = std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(t1 - t0).count();
+
+    if (v.empty()) {
+        cout &lt;&lt; &quot;No courses loaded. Use option 1 to load data first.\n\n&quot;;
+        return;
+    }
+
+    cout &lt;&lt; &quot;\nHere is a sample schedule:\n\n&quot;;
+    for (const Course&amp; c : v) {
+        cout &lt;&lt; c.number &lt;&lt; &quot;, &quot; &lt;&lt; c.title &lt;&lt; &quot;\n&quot;;
+    }
+    cout &lt;&lt; &quot;\n(List generated in &quot; &lt;&lt; ms &lt;&lt; &quot; ms)\n\n&quot;;
+}
+/* Reviewer note (Listing + timing):
+   Listing uses the non-destructive ToVectorSorted() and prints the elapsed time.
+   This supports the runtime analysis discussion with actual numbers. */
+
+   // Look up one course and print title + prerequisites with titles.
+static void PrintCourse(const HashTable&amp; table, const string&amp; rawInput) {
+    string key = NormalizeCourse(rawInput);
+    const Course* c = table.Search(key);
+    if (!c) {
+        cout &lt;&lt; &quot;Course not found: &quot; &lt;&lt; key &lt;&lt; &quot;\n\n&quot;;
+        return;
+    }
+    cout &lt;&lt; c-&gt;number &lt;&lt; &quot;, &quot; &lt;&lt; c-&gt;title &lt;&lt; &quot;\n&quot;;
+    if (c-&gt;prereqs.empty()) {
+        cout &lt;&lt; &quot;Prerequisites: None\n\n&quot;;
+        return;
+    }
+    cout &lt;&lt; &quot;Prerequisites: &quot;;
+    bool first = true;
+    for (const string&amp; p : c-&gt;prereqs) {
+        const Course* pc = table.Search(p);
+        if (!first) cout &lt;&lt; &quot;, &quot;;
+        if (pc) cout &lt;&lt; pc-&gt;number;
+        else    cout &lt;&lt; p &lt;&lt; &quot; (Not found)&quot;;
+        first = false;
+    }
+    cout &lt;&lt; &quot;\n&quot;;
+    // Also print titles under each prereq for clarity (as per directions/sample).
+    for (const string&amp; p : c-&gt;prereqs) {
+        const Course* pc = table.Search(p);
+        if (pc) cout &lt;&lt; &quot;  - &quot; &lt;&lt; pc-&gt;number &lt;&lt; &quot;: &quot; &lt;&lt; pc-&gt;title &lt;&lt; &quot;\n&quot;;
+        else    cout &lt;&lt; &quot;  - &quot; &lt;&lt; p &lt;&lt; &quot;: [Title not found]\n&quot;;
+    }
+    cout &lt;&lt; &quot;\n&quot;;
+}
+
+// Robust menu loop with input sanitization and help.
+static void MenuLoop() {
+    HashTable table;         // main data store
+    bool hasLoaded = false;  // gate printing/searching until load occurs
+
+    cout &lt;&lt; &quot;Welcome to the course planner.\n\n&quot;;
+
+    while (true) {
+        cout &lt;&lt; &quot;  1. Load Data Structure.\n&quot;
+            &quot;  2. Print Course List.\n&quot;
+            &quot;  3. Print Course.\n&quot;
+            &quot;  9. Exit\n\n&quot;
+            &quot;What would you like to do? &quot;;
+
+        string choice;
+        if (!getline(cin, choice)) break;
+        if (!choice.empty()) choice = trim(choice);
+
+        if (choice == &quot;1&quot;) {
+            cout &lt;&lt; &quot;Enter file name (e.g., courses.txt): &quot;;
+            string path;
+            if (!getline(cin, path)) break;
+            path = trim(path);
+            if (path.empty()) {
+                cout &lt;&lt; &quot;File name cannot be empty.\n\n&quot;;
+                continue;
+            }
+
+            // Load (multi-pass + summary), rebuilds the table on every load for clarity.
+            table = HashTable(); // reset
+            auto summary = LoadCoursesFromFile(path, table);
+            PrintLoadSummary(summary);
+            hasLoaded = (summary.inserted &gt; 0);
+
+        }
+        else if (choice == &quot;2&quot;) {
+            if (!hasLoaded) {
+                cout &lt;&lt; &quot;Please load the data structure first (option 1).\n\n&quot;;
+                continue;
+            }
+            PrintAll(table);
+
+        }
+        else if (choice == &quot;3&quot;) {
+            if (!hasLoaded) {
+                cout &lt;&lt; &quot;Please load the data structure first (option 1).\n\n&quot;;
+                continue;
+            }
+            while (true) {
+                cout &lt;&lt; &quot;What course do you want to know about? (or press Enter to cancel): &quot;;
+                string input;
+                getline(cin, input);
+                input = trim(input);
+                if (input.empty()) { cout &lt;&lt; &quot;(cancelled)\n\n&quot;; break; }
+                PrintCourse(table, input);
+                break;
+            }
+
+        }
+        else if (choice == &quot;9&quot;) {
+            cout &lt;&lt; &quot;Thank you for using the course planner!\n&quot;;
+            break;
+
+        }
+        else if (choice == &quot;h&quot; || choice == &quot;H&quot; || choice == &quot;?&quot;) {
+            PrintHelp();
+        }
+        else {
+            cout &lt;&lt; choice &lt;&lt; &quot; is not a valid option.\n\n&quot;;
+            // Show quick hint to improve UX
+            cout &lt;&lt; &quot;Try: 1 (Load), 2 (List), 3 (Course), 9 (Exit), or H for help.\n\n&quot;;
+        }
+    }
+}
+/* Reviewer note (Menu UX):
+   Menu accepts H/h/? for contextual help, politely re-prompts on bad input,
+   and blocks search/print until a successful load happens. This guards the UX. 
+   */
+
+   // Entry Point
+int main() {
+    MenuLoop();
+    return 0;
+}
+
+</code></pre></details></section><section><h2>Enhanced artifact</h2><details><summary>CS300_Capstone_Enhanced.cpp</summary><pre><code>// CS300_Capstone_Enhanced.cpp
+// Alondra Paulino Santos
+// CS 499 - Algorithms and Data Structures Enhancement
+//
+// Capstone Course Planning Assistant
+// -----------------------------------
+// This program enhances the original CS 300 Advising Assistance Program. It
+// retains a custom hash table with separate chaining for course storage and
+// adds a directed prerequisite graph with Kahn&#x27;s topological-sort algorithm.
+// The generated order places every prerequisite before the courses that depend
+// on it. Invalid records, missing prerequisites, self-dependencies, and cycles
+// are reported instead of being silently removed from the planning data.
+//
+// Expected input format:
+//   COURSE_NUMBER,COURSE_TITLE[,PREREQUISITE_1,PREREQUISITE_2,...]
+//
+// The CSV reader supports quoted fields and escaped quotation marks. Course
+// codes are normalized by removing spaces and hyphens and converting letters
+// to uppercase so inputs such as &quot;cs 300&quot; and &quot;CS-300&quot; match &quot;CS300&quot;.
+
+#include &lt;algorithm&gt;
+#include &lt;cctype&gt;
+#include &lt;chrono&gt;
+#include &lt;cstddef&gt;
+#include &lt;fstream&gt;
+#include &lt;functional&gt;
+#include &lt;iomanip&gt;
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;queue&gt;
+#include &lt;sstream&gt;
+#include &lt;string&gt;
+#include &lt;unordered_map&gt;
+#include &lt;unordered_set&gt;
+#include &lt;utility&gt;
+#include &lt;vector&gt;
+
+namespace advising {
+
+using Clock = std::chrono::steady_clock;
+
+// -----------------------------------------------------------------------------
+// Domain model and input-normalization helpers
+// -----------------------------------------------------------------------------
+
+// A Course is the central record shared by the hash table, search functions,
+// and prerequisite graph. Prerequisites are stored as normalized course codes.
+struct Course {
+    std::string number;
+    std::string title;
+    std::vector&lt;std::string&gt; prerequisites;
+};
+
+std::string Trim(const std::string&amp; value) {
+    std::size_t first = 0;
+    while (first &lt; value.size() &amp;&amp;
+           std::isspace(static_cast&lt;unsigned char&gt;(value[first]))) {
+        ++first;
+    }
+
+    std::size_t last = value.size();
+    while (last &gt; first &amp;&amp;
+           std::isspace(static_cast&lt;unsigned char&gt;(value[last - 1]))) {
+        --last;
+    }
+    return value.substr(first, last - first);
+}
+
+// Course-code normalization is performed at every input boundary before a
+// value is hashed or compared. This keeps file data and user input consistent.
+std::string NormalizeCourseCode(const std::string&amp; rawCode) {
+    std::string normalized;
+    normalized.reserve(rawCode.size());
+
+    for (char character : Trim(rawCode)) {
+        const unsigned char byte = static_cast&lt;unsigned char&gt;(character);
+        if (std::isspace(byte) || character == &#x27;-&#x27;) {
+            continue;
+        }
+        normalized.push_back(static_cast&lt;char&gt;(std::toupper(byte)));
+    }
+    return normalized;
+}
+
+// SNHU course codes used by this artifact contain an alphabetic department
+// prefix followed by three digits, such as CS300, CSCI200, or MATH201.
+bool IsValidCourseCode(const std::string&amp; code) {
+    // Find the boundary between the department prefix and numeric course level.
+    std::size_t prefixLength = 0;
+    while (prefixLength &lt; code.size() &amp;&amp;
+           std::isalpha(static_cast&lt;unsigned char&gt;(code[prefixLength]))) {
+        ++prefixLength;
+    }
+
+    if (prefixLength &lt; 2 || prefixLength &gt; 5 ||
+        code.size() - prefixLength != 3) {
+        return false;
+    }
+
+    for (std::size_t index = prefixLength; index &lt; code.size(); ++index) {
+        if (!std::isdigit(static_cast&lt;unsigned char&gt;(code[index]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+struct Node {
+    explicit Node(const Course&amp; courseValue) : course(courseValue) {}
+
+    Course course;
+    std::unique_ptr&lt;Node&gt; next;
+};
+
+// -----------------------------------------------------------------------------
+// Custom hash table with separate chaining
+// -----------------------------------------------------------------------------
+
+// The hash table owns each chain through unique_ptr. This prevents leaks and
+// double deletion while preserving the separate-chaining design selected in
+// the original CS 300 analysis. Copying is disabled; moving and Clear are safe.
+class HashTable {
+public:
+    static constexpr std::size_t kDefaultBucketCount = 179;
+
+    explicit HashTable(std::size_t bucketCount = kDefaultBucketCount)
+        : buckets_(std::max&lt;std::size_t&gt;(bucketCount, 1)) {}
+
+    HashTable(const HashTable&amp;) = delete;
+    HashTable&amp; operator=(const HashTable&amp;) = delete;
+    HashTable(HashTable&amp;&amp;) noexcept = default;
+    HashTable&amp; operator=(HashTable&amp;&amp;) noexcept = default;
+    ~HashTable() = default;
+
+    bool Insert(const Course&amp; course) {
+        const std::size_t bucketIndex = Hash(course.number);
+
+        // Traverse the selected chain before insertion so a duplicate key can
+        // never create two records for the same course.
+        for (Node* current = buckets_[bucketIndex].get(); current != nullptr;
+             current = current-&gt;next.get()) {
+            if (current-&gt;course.number == course.number) {
+                return false;
+            }
+        }
+
+        if (buckets_[bucketIndex] != nullptr) {
+            // A nonempty bucket means the new key collided with an existing
+            // key. Separate chaining preserves both records in the same bucket.
+            ++collisionCount_;
+        }
+
+        // Insert at the front of the chain in constant time.
+        auto node = std::make_unique&lt;Node&gt;(course);
+        node-&gt;next = std::move(buckets_[bucketIndex]);
+        buckets_[bucketIndex] = std::move(node);
+        ++size_;
+        return true;
+    }
+
+    const Course* Search(const std::string&amp; rawCourseNumber) const {
+        const std::string key = NormalizeCourseCode(rawCourseNumber);
+        const std::size_t bucketIndex = Hash(key);
+
+        // Only the computed bucket is traversed. With a well-distributed hash,
+        // this provides approximately constant-time average lookup.
+        for (const Node* current = buckets_[bucketIndex].get(); current != nullptr;
+             current = current-&gt;next.get()) {
+            if (current-&gt;course.number == key) {
+                return &amp;current-&gt;course;
+            }
+        }
+        return nullptr;
+    }
+
+    std::vector&lt;Course&gt; ToVector() const {
+        std::vector&lt;Course&gt; courses;
+        courses.reserve(size_);
+
+        for (const auto&amp; bucket : buckets_) {
+            for (const Node* current = bucket.get(); current != nullptr;
+                 current = current-&gt;next.get()) {
+                courses.push_back(current-&gt;course);
+            }
+        }
+        return courses;
+    }
+
+    std::vector&lt;Course&gt; ToSortedVector() const {
+        std::vector&lt;Course&gt; courses = ToVector();
+
+        // Hash tables do not preserve a meaningful display order, so a copied
+        // vector is sorted without changing the table&#x27;s internal chains.
+        std::sort(courses.begin(), courses.end(),
+                  [](const Course&amp; left, const Course&amp; right) {
+                      return left.number &lt; right.number;
+                  });
+        return courses;
+    }
+
+    void Clear() noexcept {
+        // Resetting each owning pointer releases the entire linked chain.
+        for (auto&amp; bucket : buckets_) {
+            bucket.reset();
+        }
+        size_ = 0;
+        collisionCount_ = 0;
+    }
+
+    bool Empty() const noexcept { return size_ == 0; }
+    std::size_t Size() const noexcept { return size_; }
+    std::size_t BucketCount() const noexcept { return buckets_.size(); }
+    std::size_t CollisionCount() const noexcept { return collisionCount_; }
+
+    double LoadFactor() const noexcept {
+        return static_cast&lt;double&gt;(size_) /
+               static_cast&lt;double&gt;(buckets_.size());
+    }
+
+    std::size_t MaximumChainLength() const noexcept {
+        std::size_t maximum = 0;
+        for (const auto&amp; bucket : buckets_) {
+            std::size_t length = 0;
+            for (const Node* current = bucket.get(); current != nullptr;
+                 current = current-&gt;next.get()) {
+                ++length;
+            }
+            maximum = std::max(maximum, length);
+        }
+        return maximum;
+    }
+
+private:
+    std::size_t Hash(const std::string&amp; key) const {
+        // std::hash supplies the hash value; modulo maps it to a valid bucket.
+        return std::hash&lt;std::string&gt;{}(key) % buckets_.size();
+    }
+
+    std::vector&lt;std::unique_ptr&lt;Node&gt;&gt; buckets_;
+    std::size_t size_ = 0;
+    std::size_t collisionCount_ = 0;
+};
+
+// -----------------------------------------------------------------------------
+// File-loading results and validation diagnostics
+// -----------------------------------------------------------------------------
+
+enum class IssueSeverity { kWarning, kError };
+
+struct LoadIssue {
+    std::size_t lineNumber = 0;
+    IssueSeverity severity = IssueSeverity::kError;
+    std::string category;
+    std::string detail;
+};
+
+struct LoadResult {
+    bool fileOpened = false;
+    bool hasBlockingRecordErrors = false;
+    std::size_t linesRead = 0;
+    std::size_t blankLinesSkipped = 0;
+    std::size_t parsedCourses = 0;
+    std::size_t insertedCourses = 0;
+    std::size_t duplicateCourses = 0;
+    std::size_t missingPrerequisites = 0;
+    std::size_t selfPrerequisites = 0;
+    std::size_t duplicatePrerequisites = 0;
+    long long elapsedMilliseconds = 0;
+    std::vector&lt;LoadIssue&gt; issues;
+
+    bool CanGeneratePlan() const {
+        // These conditions cover errors known before topological sorting. A
+        // cycle is discovered later when Kahn&#x27;s algorithm processes the graph.
+        return fileOpened &amp;&amp; insertedCourses &gt; 0 &amp;&amp;
+               !hasBlockingRecordErrors &amp;&amp; missingPrerequisites == 0 &amp;&amp;
+               selfPrerequisites == 0;
+    }
+};
+
+// Parses one CSV row while respecting quoted fields and doubled quotes. The
+// parser intentionally reports unmatched quotation marks instead of accepting
+// an ambiguous record.
+bool ParseCsvFields(const std::string&amp; line,
+                    std::vector&lt;std::string&gt;&amp; fields,
+                    std::string&amp; errorMessage) {
+    fields.clear();
+    std::string field;
+    bool inQuotes = false;
+
+    for (std::size_t index = 0; index &lt; line.size(); ++index) {
+        const char character = line[index];
+
+        if (character == &#x27;&quot;&#x27;) {
+            // Two consecutive quotation marks inside a quoted value represent
+            // one literal quotation mark in CSV.
+            if (inQuotes &amp;&amp; index + 1 &lt; line.size() &amp;&amp; line[index + 1] == &#x27;&quot;&#x27;) {
+                field.push_back(&#x27;&quot;&#x27;);
+                ++index;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (character == &#x27;,&#x27; &amp;&amp; !inQuotes) {
+            fields.push_back(Trim(field));
+            field.clear();
+        } else {
+            field.push_back(character);
+        }
+    }
+
+    if (inQuotes) {
+        errorMessage = &quot;Unmatched quotation mark&quot;;
+        return false;
+    }
+
+    fields.push_back(Trim(field));
+    return true;
+}
+
+bool ParseCourseRecord(const std::string&amp; line,
+                       std::size_t lineNumber,
+                       Course&amp; course,
+                       LoadResult&amp; result) {
+    std::vector&lt;std::string&gt; fields;
+    std::string parseError;
+    if (!ParseCsvFields(line, fields, parseError)) {
+        result.hasBlockingRecordErrors = true;
+        result.issues.push_back(
+            {lineNumber, IssueSeverity::kError, &quot;MalformedCSV&quot;, parseError});
+        return false;
+    }
+
+    if (fields.size() &lt; 2) {
+        result.hasBlockingRecordErrors = true;
+        result.issues.push_back({lineNumber, IssueSeverity::kError,
+                                 &quot;MissingField&quot;,
+                                 &quot;A course number and title are required&quot;});
+        return false;
+    }
+
+    course.number = NormalizeCourseCode(fields[0]);
+    course.title = Trim(fields[1]);
+    course.prerequisites.clear();
+
+    // Invalid primary fields make the entire record unusable because the hash
+    // table requires a trustworthy, unique course key.
+    if (!IsValidCourseCode(course.number)) {
+        result.hasBlockingRecordErrors = true;
+        result.issues.push_back(
+            {lineNumber, IssueSeverity::kError, &quot;InvalidCourseCode&quot;,
+             &quot;Invalid course number: &quot; + course.number});
+        return false;
+    }
+
+    if (course.title.empty()) {
+        result.hasBlockingRecordErrors = true;
+        result.issues.push_back(
+            {lineNumber, IssueSeverity::kError, &quot;MissingField&quot;,
+             &quot;Course title is empty for &quot; + course.number});
+        return false;
+    }
+
+    std::unordered_set&lt;std::string&gt; seenPrerequisites;
+    for (std::size_t index = 2; index &lt; fields.size(); ++index) {
+        const std::string prerequisite = NormalizeCourseCode(fields[index]);
+        if (prerequisite.empty()) {
+            continue;
+        }
+
+        if (!IsValidCourseCode(prerequisite)) {
+            result.hasBlockingRecordErrors = true;
+            result.issues.push_back(
+                {lineNumber, IssueSeverity::kError, &quot;InvalidPrerequisiteCode&quot;,
+                 &quot;Invalid prerequisite &#x27;&quot; + prerequisite + &quot;&#x27; for &quot; +
+                     course.number});
+        }
+
+        if (!seenPrerequisites.insert(prerequisite).second) {
+            // Repeated edges would incorrectly increase the prerequisite count
+            // during topological sorting, so each relationship is stored once.
+            ++result.duplicatePrerequisites;
+            result.issues.push_back(
+                {lineNumber, IssueSeverity::kWarning, &quot;DuplicatePrerequisite&quot;,
+                 &quot;Repeated prerequisite &#x27;&quot; + prerequisite + &quot;&#x27; for &quot; +
+                     course.number + &quot; was counted once&quot;});
+            continue;
+        }
+        course.prerequisites.push_back(prerequisite);
+    }
+    return true;
+}
+
+// Relationship validation reports missing and self prerequisites but does not
+// delete them. Preserving the original edges prevents the planner from showing
+// a misleading course order based on silently repaired data.
+void ValidateRelationships(
+    const std::unordered_map&lt;std::string, Course&gt;&amp; parsedCourses,
+    const std::unordered_map&lt;std::string, std::size_t&gt;&amp; sourceLines,
+    LoadResult&amp; result) {
+    for (const auto&amp; entry : parsedCourses) {
+        const Course&amp; course = entry.second;
+        const std::size_t lineNumber = sourceLines.at(course.number);
+
+        for (const std::string&amp; prerequisite : course.prerequisites) {
+            if (prerequisite == course.number) {
+                ++result.selfPrerequisites;
+                result.issues.push_back(
+                    {lineNumber, IssueSeverity::kError, &quot;SelfPrerequisite&quot;,
+                     course.number + &quot; cannot require itself&quot;});
+            } else if (parsedCourses.find(prerequisite) == parsedCourses.end()) {
+                ++result.missingPrerequisites;
+                result.issues.push_back(
+                    {lineNumber, IssueSeverity::kError, &quot;MissingPrerequisite&quot;,
+                     &quot;Prerequisite &#x27;&quot; + prerequisite + &quot;&#x27; required by &quot; +
+                         course.number + &quot; is not defined&quot;});
+            }
+        }
+    }
+}
+
+LoadResult LoadCoursesFromFile(const std::string&amp; filePath, HashTable&amp; table) {
+    LoadResult result;
+    const auto startTime = Clock::now();
+    std::ifstream input(filePath);
+
+    if (!input.is_open()) {
+        result.issues.push_back({0, IssueSeverity::kError, &quot;FileError&quot;,
+                                 &quot;Unable to open file: &quot; + filePath});
+        return result;
+    }
+    result.fileOpened = true;
+
+    std::unordered_map&lt;std::string, Course&gt; parsedCourses;
+    std::unordered_map&lt;std::string, std::size_t&gt; sourceLines;
+    std::string line;
+    std::size_t lineNumber = 0;
+
+    while (std::getline(input, line)) {
+        ++lineNumber;
+        ++result.linesRead;
+
+        const std::string trimmedLine = Trim(line);
+        if (trimmedLine.empty() || trimmedLine.front() == &#x27;#&#x27;) {
+            ++result.blankLinesSkipped;
+            continue;
+        }
+
+        Course course;
+        if (!ParseCourseRecord(line, lineNumber, course, result)) {
+            // The parser has already recorded a line-specific explanation.
+            continue;
+        }
+
+        // Duplicates are rejected from the temporary collection and marked as
+        // blocking because choosing one conflicting definition would be unsafe.
+        if (parsedCourses.find(course.number) != parsedCourses.end()) {
+            ++result.duplicateCourses;
+            result.hasBlockingRecordErrors = true;
+            result.issues.push_back(
+                {lineNumber, IssueSeverity::kError, &quot;DuplicateCourse&quot;,
+                 &quot;Duplicate course number: &quot; + course.number});
+            continue;
+        }
+
+        sourceLines[course.number] = lineNumber;
+        parsedCourses.emplace(course.number, std::move(course));
+        ++result.parsedCourses;
+    }
+
+    // This second pass can validate cross-record relationships only after all
+    // course definitions have been collected.
+    ValidateRelationships(parsedCourses, sourceLines, result);
+
+    // Load into a fresh table first. Moving the completed table into place
+    // avoids mixing records from two files and avoids unsafe pointer copying.
+    HashTable replacement(table.BucketCount());
+    for (const auto&amp; entry : parsedCourses) {
+        if (replacement.Insert(entry.second)) {
+            ++result.insertedCourses;
+        }
+    }
+    table = std::move(replacement);
+
+    const auto endTime = Clock::now();
+    result.elapsedMilliseconds =
+        std::chrono::duration_cast&lt;std::chrono::milliseconds&gt;(endTime - startTime)
+            .count();
+    return result;
+}
+
+struct CourseOrderResult {
+    bool success = false;
+    std::vector&lt;Course&gt; orderedCourses;
+    std::vector&lt;std::string&gt; errors;
+    std::vector&lt;std::string&gt; unresolvedCourses;
+};
+
+// -----------------------------------------------------------------------------
+// Directed-graph construction and topological sorting
+// -----------------------------------------------------------------------------
+
+// Builds an adjacency list with edges prerequisite -&gt; dependent course and
+// applies Kahn&#x27;s algorithm. Graph construction and traversal use O(V + E)
+// time and space, where V is courses and E is prerequisite relationships.
+CourseOrderResult GenerateCourseOrder(const HashTable&amp; table,
+                                      const LoadResult&amp; loadResult) {
+    CourseOrderResult result;
+    if (table.Empty()) {
+        result.errors.push_back(
+            &quot;Load course data before generating a course order.&quot;);
+        return result;
+    }
+
+    if (loadResult.hasBlockingRecordErrors) {
+        result.errors.push_back(
+            &quot;Correct malformed or duplicate course records before planning.&quot;);
+        return result;
+    }
+
+    const std::vector&lt;Course&gt; courses = table.ToVector();
+
+    // courseByNumber supports constant-time access to complete course records.
+    // dependents is the adjacency list, and prerequisiteCount is the in-degree
+    // collection used by Kahn&#x27;s algorithm.
+    std::unordered_map&lt;std::string, const Course*&gt; courseByNumber;
+    std::unordered_map&lt;std::string, std::vector&lt;std::string&gt;&gt; dependents;
+    std::unordered_map&lt;std::string, std::size_t&gt; prerequisiteCount;
+
+    courseByNumber.reserve(courses.size());
+    dependents.reserve(courses.size());
+    prerequisiteCount.reserve(courses.size());
+
+    for (const Course&amp; course : courses) {
+        // Initialize every vertex even when it has no incoming or outgoing edge.
+        courseByNumber[course.number] = &amp;course;
+        dependents[course.number] = {};
+        prerequisiteCount[course.number] = 0;
+    }
+
+    bool relationshipsAreValid = true;
+    for (const Course&amp; course : courses) {
+        std::unordered_set&lt;std::string&gt; distinctPrerequisites;
+        for (const std::string&amp; prerequisite : course.prerequisites) {
+            if (!distinctPrerequisites.insert(prerequisite).second) {
+                continue;
+            }
+            if (prerequisite == course.number) {
+                relationshipsAreValid = false;
+                result.errors.push_back(course.number + &quot; cannot require itself.&quot;);
+            } else if (courseByNumber.find(prerequisite) == courseByNumber.end()) {
+                relationshipsAreValid = false;
+                result.errors.push_back(&quot;Missing prerequisite &quot; + prerequisite +
+                                        &quot; required by &quot; + course.number + &quot;.&quot;);
+            } else {
+                // The edge points from prerequisite to dependent. The dependent
+                // cannot enter the ready queue until all incoming edges clear.
+                dependents[prerequisite].push_back(course.number);
+                ++prerequisiteCount[course.number];
+            }
+        }
+    }
+
+    if (!relationshipsAreValid) {
+        result.errors.push_back(
+            &quot;No complete course order was generated from invalid relationships.&quot;);
+        return result;
+    }
+
+    std::queue&lt;std::string&gt; readyCourses;
+    for (const Course&amp; course : courses) {
+        // Courses with zero incoming edges can be taken immediately.
+        if (prerequisiteCount[course.number] == 0) {
+            readyCourses.push(course.number);
+        }
+    }
+
+    while (!readyCourses.empty()) {
+        // Removing a ready vertex simulates completing that course. Each
+        // outgoing edge is then removed from its dependent course.
+        const std::string current = readyCourses.front();
+        readyCourses.pop();
+        result.orderedCourses.push_back(*courseByNumber.at(current));
+
+        for (const std::string&amp; dependent : dependents[current]) {
+            std::size_t&amp; remaining = prerequisiteCount[dependent];
+            --remaining;
+            if (remaining == 0) {
+                // All prerequisites for this dependent have now been processed.
+                readyCourses.push(dependent);
+            }
+        }
+    }
+
+    if (result.orderedCourses.size() != courses.size()) {
+        // Any vertex with a remaining incoming edge belongs to, or depends on,
+        // a cycle. A partial result must not be presented as a complete plan.
+        for (const Course&amp; course : courses) {
+            if (prerequisiteCount[course.number] &gt; 0) {
+                result.unresolvedCourses.push_back(course.number);
+            }
+        }
+        std::sort(result.unresolvedCourses.begin(),
+                  result.unresolvedCourses.end());
+        result.orderedCourses.clear();
+        result.errors.push_back(
+            &quot;Circular dependencies prevent a complete course order.&quot;);
+        return result;
+    }
+
+    result.success = true;
+    return result;
+}
+
+// -----------------------------------------------------------------------------
+// Console presentation and application workflow
+// -----------------------------------------------------------------------------
+
+void PrintLoadSummary(const LoadResult&amp; result, const HashTable&amp; table) {
+    std::cout &lt;&lt; &quot;\n=== Load Summary ===\n&quot;
+              &lt;&lt; &quot;Lines read:             &quot; &lt;&lt; result.linesRead &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Blank/comments skipped: &quot; &lt;&lt; result.blankLinesSkipped &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Courses parsed:         &quot; &lt;&lt; result.parsedCourses &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Courses inserted:       &quot; &lt;&lt; result.insertedCourses &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Duplicate courses:      &quot; &lt;&lt; result.duplicateCourses &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Missing prerequisites:  &quot; &lt;&lt; result.missingPrerequisites &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Self prerequisites:     &quot; &lt;&lt; result.selfPrerequisites &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Duplicate prerequisites:&quot; &lt;&lt; result.duplicatePrerequisites &lt;&lt; &#x27;\n&#x27;
+              &lt;&lt; &quot;Load time:              &quot; &lt;&lt; result.elapsedMilliseconds
+              &lt;&lt; &quot; ms\n&quot;;
+
+    if (result.fileOpened) {
+        std::cout &lt;&lt; &quot;Hash-table load factor: &quot; &lt;&lt; std::fixed
+                  &lt;&lt; std::setprecision(3) &lt;&lt; table.LoadFactor() &lt;&lt; &#x27;\n&#x27;
+                  &lt;&lt; &quot;Hash collisions:        &quot; &lt;&lt; table.CollisionCount() &lt;&lt; &#x27;\n&#x27;
+                  &lt;&lt; &quot;Maximum chain length:   &quot; &lt;&lt; table.MaximumChainLength()
+                  &lt;&lt; &#x27;\n&#x27;;
+    }
+
+    if (!result.issues.empty()) {
+        std::cout &lt;&lt; &quot;\nValidation details:\n&quot;;
+        for (const LoadIssue&amp; issue : result.issues) {
+            std::cout &lt;&lt; &quot;- &quot;
+                      &lt;&lt; (issue.severity == IssueSeverity::kError ? &quot;ERROR&quot; :
+                                                                  &quot;WARNING&quot;);
+            if (issue.lineNumber &gt; 0) {
+                std::cout &lt;&lt; &quot; [line &quot; &lt;&lt; issue.lineNumber &lt;&lt; &#x27;]&#x27;;
+            }
+            std::cout &lt;&lt; &#x27; &#x27; &lt;&lt; issue.category &lt;&lt; &quot;: &quot; &lt;&lt; issue.detail &lt;&lt; &#x27;\n&#x27;;
+        }
+    }
+
+    if (result.CanGeneratePlan()) {
+        std::cout &lt;&lt; &quot;\nRecord and prerequisite-reference validation passed. &quot;
+                     &quot;Cycle validation will run when a course order is &quot;
+                     &quot;generated.\n&quot;;
+    } else if (result.fileOpened &amp;&amp; result.insertedCourses &gt; 0) {
+        std::cout &lt;&lt; &quot;\nCourse records are available for review, but validation &quot;
+                     &quot;errors must be corrected before generating a plan.\n&quot;;
+    }
+    std::cout &lt;&lt; &quot;====================\n\n&quot;;
+}
+
+void PrintAllCourses(const HashTable&amp; table) {
+    if (table.Empty()) {
+        std::cout &lt;&lt; &quot;No courses are loaded. Use option 1 first.\n\n&quot;;
+        return;
+    }
+
+    const auto startTime = Clock::now();
+    const std::vector&lt;Course&gt; courses = table.ToSortedVector();
+    const auto endTime = Clock::now();
+    const auto elapsed =
+        std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(endTime - startTime)
+            .count();
+
+    std::cout &lt;&lt; &quot;\nCourse Catalog\n--------------\n&quot;;
+    for (const Course&amp; course : courses) {
+        std::cout &lt;&lt; course.number &lt;&lt; &quot;, &quot; &lt;&lt; course.title &lt;&lt; &#x27;\n&#x27;;
+    }
+    std::cout &lt;&lt; &quot;\nAlphabetical list generated in &quot; &lt;&lt; elapsed
+              &lt;&lt; &quot; microseconds.\n\n&quot;;
+}
+
+void PrintCourse(const HashTable&amp; table, const std::string&amp; rawCourseNumber) {
+    const std::string courseNumber = NormalizeCourseCode(rawCourseNumber);
+    if (!IsValidCourseCode(courseNumber)) {
+        std::cout &lt;&lt; &quot;Enter a valid course number such as CS300 or CSCI200.\n\n&quot;;
+        return;
+    }
+
+    const Course* course = table.Search(courseNumber);
+    if (course == nullptr) {
+        std::cout &lt;&lt; &quot;Course not found: &quot; &lt;&lt; courseNumber &lt;&lt; &quot;\n\n&quot;;
+        return;
+    }
+
+    std::cout &lt;&lt; &#x27;\n&#x27; &lt;&lt; course-&gt;number &lt;&lt; &quot;, &quot; &lt;&lt; course-&gt;title &lt;&lt; &#x27;\n&#x27;;
+    if (course-&gt;prerequisites.empty()) {
+        std::cout &lt;&lt; &quot;Prerequisites: None\n\n&quot;;
+        return;
+    }
+
+    std::cout &lt;&lt; &quot;Prerequisites:\n&quot;;
+    for (const std::string&amp; prerequisite : course-&gt;prerequisites) {
+        const Course* prerequisiteCourse = table.Search(prerequisite);
+        if (prerequisiteCourse != nullptr) {
+            std::cout &lt;&lt; &quot;  - &quot; &lt;&lt; prerequisiteCourse-&gt;number &lt;&lt; &quot;: &quot;
+                      &lt;&lt; prerequisiteCourse-&gt;title &lt;&lt; &#x27;\n&#x27;;
+        } else {
+            std::cout &lt;&lt; &quot;  - &quot; &lt;&lt; prerequisite &lt;&lt; &quot;: [course not found]\n&quot;;
+        }
+    }
+    std::cout &lt;&lt; &#x27;\n&#x27;;
+}
+
+void PrintCourseOrder(const HashTable&amp; table, const LoadResult&amp; loadResult) {
+    // Timing is informational and helps connect the implementation to the
+    // runtime analysis discussed in the enhancement narrative.
+    const auto startTime = Clock::now();
+    const CourseOrderResult order = GenerateCourseOrder(table, loadResult);
+    const auto endTime = Clock::now();
+    const auto elapsed =
+        std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(endTime - startTime)
+            .count();
+
+    if (!order.success) {
+        std::cout &lt;&lt; &quot;\nUnable to generate a complete course order:\n&quot;;
+        for (const std::string&amp; error : order.errors) {
+            std::cout &lt;&lt; &quot;- &quot; &lt;&lt; error &lt;&lt; &#x27;\n&#x27;;
+        }
+        if (!order.unresolvedCourses.empty()) {
+            std::cout &lt;&lt; &quot;Unresolved courses:&quot;;
+            for (const std::string&amp; course : order.unresolvedCourses) {
+                std::cout &lt;&lt; &#x27; &#x27; &lt;&lt; course;
+            }
+            std::cout &lt;&lt; &#x27;\n&#x27;;
+        }
+        std::cout &lt;&lt; &#x27;\n&#x27;;
+        return;
+    }
+
+    std::cout &lt;&lt; &quot;\nSuggested Prerequisite-Respecting Course Order\n&quot;
+              &lt;&lt; &quot;-----------------------------------------------\n&quot;;
+    for (std::size_t index = 0; index &lt; order.orderedCourses.size(); ++index) {
+        const Course&amp; course = order.orderedCourses[index];
+        std::cout &lt;&lt; std::setw(3) &lt;&lt; index + 1 &lt;&lt; &quot;. &quot; &lt;&lt; course.number &lt;&lt; &quot;, &quot;
+                  &lt;&lt; course.title &lt;&lt; &#x27;\n&#x27;;
+    }
+    std::cout &lt;&lt; &quot;\nThis order respects prerequisite relationships but does not &quot;
+                 &quot;assign semesters or account for course availability or &quot;
+                 &quot;credit limits.\n&quot;
+              &lt;&lt; &quot;Topological order generated in &quot; &lt;&lt; elapsed
+              &lt;&lt; &quot; microseconds.\n\n&quot;;
+}
+
+void PrintHelp() {
+    std::cout
+        &lt;&lt; &quot;\nHelp\n----\n&quot;
+        &lt;&lt; &quot;1. Load Course Data - Load and validate a CSV course file.\n&quot;
+        &lt;&lt; &quot;2. Print Course List - Display courses alphabetically.\n&quot;
+        &lt;&lt; &quot;3. Print Course - Display one course and its prerequisites.\n&quot;
+        &lt;&lt; &quot;4. Generate Course Order - Place prerequisites before dependents.\n&quot;
+        &lt;&lt; &quot;9. Exit - Close the application.\n&quot;
+        &lt;&lt; &quot;Enter H or ? at the menu to display this help.\n\n&quot;;
+}
+
+void RunApplication() {
+    HashTable table;
+    LoadResult latestLoad;
+    bool loadAttempted = false;
+
+    std::cout &lt;&lt; &quot;Welcome to the Capstone Course Planning Assistant.\n&quot;;
+
+    while (true) {
+        std::cout &lt;&lt; &quot;\n  1. Load Course Data\n&quot;
+                  &lt;&lt; &quot;  2. Print Course List\n&quot;
+                  &lt;&lt; &quot;  3. Print Course\n&quot;
+                  &lt;&lt; &quot;  4. Generate Prerequisite-Respecting Course Order\n&quot;
+                  &lt;&lt; &quot;  9. Exit\n\n&quot;
+                  &lt;&lt; &quot;What would you like to do? &quot;;
+
+        std::string choice;
+        if (!std::getline(std::cin, choice)) {
+            std::cout &lt;&lt; &quot;\nInput closed. Exiting the application.\n&quot;;
+            break;
+        }
+        choice = Trim(choice);
+
+        if (choice == &quot;1&quot;) {
+            std::cout &lt;&lt; &quot;Enter the course data file path: &quot;;
+            std::string filePath;
+            if (!std::getline(std::cin, filePath)) {
+                std::cout &lt;&lt; &quot;\nInput closed. Exiting the application.\n&quot;;
+                break;
+            }
+            filePath = Trim(filePath);
+            if (filePath.empty()) {
+                std::cout &lt;&lt; &quot;A file path is required.\n&quot;;
+                continue;
+            }
+
+            latestLoad = LoadCoursesFromFile(filePath, table);
+            loadAttempted = true;
+            PrintLoadSummary(latestLoad, table);
+        } else if (choice == &quot;2&quot;) {
+            PrintAllCourses(table);
+        } else if (choice == &quot;3&quot;) {
+            if (table.Empty()) {
+                std::cout &lt;&lt; &quot;Load course data before searching.\n&quot;;
+                continue;
+            }
+            std::cout &lt;&lt; &quot;Enter a course number (or press Enter to cancel): &quot;;
+            std::string courseNumber;
+            if (!std::getline(std::cin, courseNumber)) {
+                std::cout &lt;&lt; &quot;\nInput closed. Exiting the application.\n&quot;;
+                break;
+            }
+            if (Trim(courseNumber).empty()) {
+                std::cout &lt;&lt; &quot;Search cancelled.\n&quot;;
+                continue;
+            }
+            PrintCourse(table, courseNumber);
+        } else if (choice == &quot;4&quot;) {
+            // Generation is intentionally separate from loading so users can
+            // review validation results before requesting an academic plan.
+            if (!loadAttempted) {
+                std::cout &lt;&lt; &quot;Load course data before generating an order.\n&quot;;
+                continue;
+            }
+            PrintCourseOrder(table, latestLoad);
+        } else if (choice == &quot;9&quot;) {
+            std::cout &lt;&lt; &quot;Thank you for using the Capstone Course Planning &quot;
+                         &quot;Assistant.\n&quot;;
+            break;
+        } else if (choice == &quot;H&quot; || choice == &quot;h&quot; || choice == &quot;?&quot;) {
+            PrintHelp();
+        } else {
+            std::cout &lt;&lt; &quot;&#x27;&quot; &lt;&lt; choice
+                      &lt;&lt; &quot;&#x27; is not a valid option. Enter H for help.\n&quot;;
+        }
+    }
+}
+
+}  // namespace advising
+
+int main() {
+    advising::RunApplication();
+    return 0;
+}
+</code></pre></details></section><section><h2>Supporting files and test data</h2><details><summary>README.md</summary><pre><code># CS 499 Enhancement Two: Algorithms and Data Structures
+
+This folder contains the original and enhanced versions of the CS 300 course-planning artifact used for the algorithms and data structures category of the CS 499 capstone.
+
+## Included files
+
+- `ProjectTwoCS300.cpp` — original CS 300 artifact.
+- `CS300_Capstone_Enhanced.cpp` — enhanced C++17 implementation.
+- `test_valid_courses.csv` — valid prerequisite graph.
+- `test_cycle_courses.csv` — circular-dependency test.
+- `test_invalid_prerequisites.csv` — missing and self-referencing prerequisite test.
+- `test_duplicate_malformed.csv` — duplicate and malformed record test.
+- `CS 300 Algorithms and Data Structures Enhancement Narrative.docx` — final enhancement narrative with embedded verification evidence.
+- `Evidence/Screenshots/` — original-resolution test screenshots.
+
+## Enhancement summary
+
+The enhanced application preserves the custom hash table for course storage and lookup, then models prerequisites as a directed graph. It uses Kahn&#x27;s topological-sort algorithm with an adjacency list, incoming-edge counts, and a queue to generate a prerequisite-respecting course order. Graph construction and traversal require `O(V + E)` time and `O(V + E)` additional space, where `V` is the number of courses and `E` is the number of prerequisite relationships.
+
+The loader also reports duplicate courses, repeated prerequisite edges, malformed records, invalid course codes, missing prerequisites, and self-dependencies. Course-order generation is blocked when invalid relationships could make the recommendation unreliable, and cycles are reported with unresolved course codes.
+
+## Build and run
+
+```bash
+clang++ -std=c++17 -Wall -Wextra -Wpedantic -Werror CS300_Capstone_Enhanced.cpp -o cs300_enhanced
+./cs300_enhanced
+```
+
+Inside the program, select option `1`, enter one of the CSV test-file names, and select option `4` to generate or validate the course order. Select option `9` to exit.
+
+## Runtime-safety check
+
+```bash
+clang++ -std=c++17 -Wall -Wextra -Wpedantic \
+  -fsanitize=address,undefined -fno-omit-frame-pointer \
+  CS300_Capstone_Enhanced.cpp -o cs300_sanitized
+./cs300_sanitized
+```
+
+The narrative documents the design decisions, Big-O analysis, course-outcome connections, validation behavior, trade-offs, and observed test results.
+</code></pre></details>
+<details><summary>test_cycle_courses.csv</summary><pre><code>CS100,Introduction to Programming,CS300
+CS200,Data Structures,CS100
+CS300,Algorithms,CS200</code></pre></details>
+<details><summary>test_duplicate_malformed.csv</summary><pre><code>CS100,Introduction to Programming
+CS100,Duplicate Introduction Course
+CS200,Data Structures,CS100,CS100
+CS300
+,Missing Course Code
+CS400,Advanced Software Engineering,CS200</code></pre></details>
+<details><summary>test_invalid_prerequisites.csv</summary><pre><code>CS100,Introduction to Programming
+CS200,Data Structures,CS999
+CS300,Algorithms,CS300</code></pre></details>
+<details><summary>test_valid_courses.csv</summary><pre><code>MATH100,College Mathematics
+CS100,Introduction to Programming
+CS200,Data Structures,CS100
+CS250,Computer Systems,CS100
+CS300,Algorithms,CS200,CS250
+CS400,Advanced Software Engineering,CS300</code></pre></details></section></main><footer><div class="container">© Alondra Paulino Santos · CS 499 Computer Science Capstone</div></footer></body></html>

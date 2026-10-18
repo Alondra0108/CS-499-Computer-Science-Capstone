@@ -1,0 +1,2014 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Source Code | CS 499 Capstone</title><link rel="stylesheet" href="../styles.css"></head>
+<body><a class="skip-link" href="#content">Skip to content</a><header class="hero"><div class="container"><p class="eyebrow">CS 499 Computer Science Capstone</p><h1>Source Code</h1><p class="intro">Databases</p></div></header>
+<main id="content" class="container reading"><nav aria-label="Portfolio navigation"><a href="../">Portfolio home</a> · <a href="./">Enhancement overview</a> · <a href="narrative.html">Narrative</a> · <a href="source.html">Source code</a> · <a href="evidence.html">Evidence</a></nav><h2>Original and Enhanced Source Code</h2><p>Expand a file to read its source. The complete archive retains the original directory structure and supporting files.</p><p><a class="button" href="CS340-Original-and-Enhanced-Source.zip">Download complete source</a></p><section><h2>Original artifact</h2><details><summary>original_artifact/CRUD_Python_Module-2.py</summary><pre><code># Example Python Code to Insert a Document
+
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+import logging
+
+
+# Use logging instead of print() for errors (more professional / industry standard).
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class AnimalShelter(object):
+    &quot;&quot;&quot; CRUD operations for Animal collection in MongoDB &quot;&quot;&quot;
+
+    def __init__(self, username, password):
+        &quot;&quot;&quot;
+        Initialize MongoDB connection.
+
+        Parameters:
+            username (str): MongoDB username (ex: &#x27;aacuser&#x27;)
+            password (str): MongoDB password
+
+        Notes:
+            - Connects to the aac database and animals collection
+            - Authenticates against the admin database (per SNHU examples)
+        &quot;&quot;&quot;
+        # Initializing the MongoClient to access MongoDB
+        # This connects to the aac database and animals collection
+        # using the aacuser account
+        USER = username
+        PASS = password
+        HOST = &#x27;localhost&#x27;
+        PORT = 27017
+        DB = &#x27;aac&#x27;
+        COL = &#x27;animals&#x27;
+
+        # Validate credentials early so errors are clear and consistent.
+        # (Industry standard: validate inputs before attempting network calls.)
+        if not isinstance(USER, str) or not isinstance(PASS, str) or USER == &quot;&quot; or PASS == &quot;&quot;:
+            raise ValueError(&quot;MongoDB username and password must be non-empty strings.&quot;)
+
+        try:
+            # Create the MongoDB client connection
+            self.client = MongoClient(
+                &#x27;mongodb://%s:%s@%s:%d/admin&#x27; % (USER, PASS, HOST, PORT)
+            )
+
+            # Access the specified database and collection
+            self.database = self.client[&#x27;%s&#x27; % (DB)]
+            self.collection = self.database[&#x27;%s&#x27; % (COL)]
+
+            # Optional connection check (fails fast if auth/connection is wrong)
+            self.client.admin.command(&#x27;ping&#x27;)
+
+        except Exception as e:
+            # Log the error and re-raise so the calling code knows connection failed.
+            logger.error(&quot;MongoDB connection failed: %s&quot;, e)
+            raise
+
+    # Create method to insert a document into the animals collection
+    def create(self, data):
+        &quot;&quot;&quot;
+        Insert one document into MongoDB.
+
+        Parameters:
+            data (dict): Document to insert.
+
+        Returns:
+            bool: True if insert succeeds, otherwise False.
+        &quot;&quot;&quot;
+        # Industry standard: validate inputs and fail safely.
+        if data is None or not isinstance(data, dict) or len(data) == 0:
+            logger.warning(&quot;Create failed: data must be a non-empty dictionary.&quot;)
+            return False
+
+        try:
+            # Insert the document into MongoDB
+            self.collection.insert_one(data)
+            return True
+
+        except Exception as e:
+            logger.error(&quot;Create failed: %s&quot;, e)
+            return False
+
+    # Read method to retrieve documents from the animals collection
+    def read(self, query):
+        &quot;&quot;&quot;
+        Retrieve documents using a MongoDB query.
+
+        Parameters:
+            query (dict): Query filter. Use {} to retrieve all.
+
+        Returns:
+            list: Matching documents (empty list if none found or error).
+        &quot;&quot;&quot;
+        results = []
+
+        # Treat None as &quot;retrieve all&quot; to avoid crashes and support edge-case testing.
+        if query is None:
+            query = {}
+
+        # Validate query format
+        if not isinstance(query, dict):
+            logger.warning(&quot;Read failed: query must be a dictionary.&quot;)
+            return results
+
+        try:
+            # Find matching documents using the query dictionary
+            cursor = self.collection.find(query)
+            for document in cursor:
+                results.append(document)
+
+        except Exception as e:
+            logger.error(&quot;Read failed: %s&quot;, e)
+
+        # Return a list of matching documents (or empty list if none found)
+        return results
+
+    # Update method to change document(s) in the animals collection
+    def update(self, query, new_values):
+        &quot;&quot;&quot;
+        Update matching document(s) using a query and MongoDB update operation.
+
+        Parameters:
+            query (dict): Query filter to match documents.
+            new_values (dict): Update operation, ex: {&quot;$set&quot;: {&quot;color&quot;: &quot;Black&quot;}}
+
+        Returns:
+            int: Number of documents modified (0 if none modified or error).
+        &quot;&quot;&quot;
+        if query is not None and new_values is not None:
+            # Validate types for industry-standard robustness
+            if not isinstance(query, dict) or not isinstance(new_values, dict):
+                logger.warning(&quot;Update failed: query and new_values must be dictionaries.&quot;)
+                return 0
+
+            try:
+                # Update matching document(s) using the query and update data
+                # new_values must be in the format accepted by MongoDB, such as:
+                # {&quot;$set&quot;: {&quot;color&quot;: &quot;Black&quot;}}
+                result = self.collection.update_many(query, new_values)
+                return result.modified_count
+
+            except Exception as e:
+                logger.error(&quot;Update failed: %s&quot;, e)
+                return 0
+        else:
+            return 0
+
+    # Delete method to remove document(s) from the animals collection
+    def delete(self, query):
+        &quot;&quot;&quot;
+        Delete matching document(s) using a MongoDB query.
+
+        Parameters:
+            query (dict): Query filter to match documents for deletion.
+
+        Returns:
+            int: Number of documents deleted (0 if none deleted or error).
+        &quot;&quot;&quot;
+        if query is not None:
+            # Validate query type (prevents common edge-case crashes)
+            if not isinstance(query, dict):
+                logger.warning(&quot;Delete failed: query must be a dictionary.&quot;)
+                return 0
+
+            try:
+                # Delete matching document(s) using the query
+                result = self.collection.delete_many(query)
+                return result.deleted_count
+
+            except Exception as e:
+                logger.error(&quot;Delete failed: %s&quot;, e)
+                return 0
+        else:
+            return 0</code></pre></details>
+<details><summary>original_artifact/ProjectTwoDashboard-2.ipynb</summary><pre><code># Setup the Jupyter version of Dash
+from jupyter_dash import JupyterDash
+
+# Import the Python modules needed for the dashboard components
+import dash_leaflet as dl
+from dash import dcc, html
+import plotly.express as px
+from dash import dash_table
+from dash.dependencies import Input, Output, State
+import base64
+import os
+
+# Import libraries for plotting / data handling
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Codio / Jupyter proxy support
+JupyterDash.infer_jupyter_proxy_config()
+
+
+# Import CRUD module (this is how the dashboard talks to MongoDB)
+# My CRUD file is named CRUD_Python_Module.py, and the class is AnimalShelter.
+from CRUD_Python_Module import AnimalShelter
+
+###########################
+# Data Manipulation / Model
+###########################
+
+# These are the same MongoDB credentials I used in my earlier work,
+# so the connection matches my database setup.
+username = &quot;aacuser&quot;
+password = &quot;REDACTED_BEFORE_PUBLICATION&quot;  # Original classroom password removed before publication
+
+# Create the CRUD object. From this point on, all database reads go through db.read(query).
+db = AnimalShelter(username, password)
+
+# Start the dashboard with an unfiltered view so the user sees the full dataset right away.
+df = pd.DataFrame.from_records(db.read({}))
+
+# MongoDB automatically adds an _id column.
+# Dash DataTable can have issues displaying ObjectId values,
+# so I remove that column before sending the data to the table.
+if &quot;_id&quot; in df.columns:
+    df.drop(columns=[&quot;_id&quot;], inplace=True)
+
+#########################
+# Dashboard Layout / View
+#########################
+
+app = JupyterDash(__name__)
+
+# Load the Grazioso Salvare logo and display it at the top of the dashboard.
+image_filename = &quot;Grazioso Salvare Logo.png&quot;
+encoded_logo = base64.b64encode(open(image_filename, &quot;rb&quot;).read()).decode(&quot;utf-8&quot;)
+
+
+# Page layout (what the user sees)
+# I kept the layout simple: branding at the top, filter controls under it, then the table,
+# then the chart + map side-by-side.
+app.layout = html.Div([
+    # Header area with the logo and my identifier
+    html.Div(
+        style={&quot;display&quot;: &quot;flex&quot;, &quot;alignItems&quot;: &quot;center&quot;, &quot;gap&quot;: &quot;18px&quot;},
+        children=[
+            # The logo is clickable and opens the SNHU page in a new tab.
+            html.A(
+                href=&quot;https://www.snhu.edu&quot;,
+                target=&quot;_blank&quot;,
+                children=[
+                    html.Img(
+                        src=f&quot;data:image/png;base64,{encoded_logo}&quot; if encoded_logo else &quot;&quot;,
+                        style={&quot;height&quot;: &quot;110px&quot;}
+                    )
+                ]
+            ),
+            html.Div(children=[
+                html.H1(&quot;CS-340 Dashboard&quot;, style={&quot;marginBottom&quot;: &quot;0.2rem&quot;}),
+                html.H3(&quot;Creator: Alondra Paulino Santos&quot;, style={&quot;marginTop&quot;: &quot;0&quot;}),
+                html.H4(&quot;Dashboard ID: APS-CS340&quot;, style={&quot;marginTop&quot;: &quot;0.2rem&quot;})
+            ])
+        ]
+    ),
+
+    html.Hr(),
+
+    # Filter controls: these are the main options the user uses to change what dogs appear in the dashboard.
+    # When the user changes this selection, the table updates, and the chart/map update automatically from the table.
+    html.Div(
+        style={&quot;padding&quot;: &quot;10px 0&quot;},
+        children=[
+            html.H4(&quot;Rescue Filters&quot;, style={&quot;marginBottom&quot;: &quot;0.5rem&quot;}),
+
+            dcc.RadioItems(
+                id=&quot;filter-type&quot;,
+                value=&quot;reset&quot;,
+                inline=True,
+                options=[
+                    {&quot;label&quot;: &quot;Water Rescue&quot;, &quot;value&quot;: &quot;water&quot;},
+                    {&quot;label&quot;: &quot;Mountain / Wilderness Rescue&quot;, &quot;value&quot;: &quot;mountain&quot;},
+                    {&quot;label&quot;: &quot;Disaster / Individual Tracking&quot;, &quot;value&quot;: &quot;disaster&quot;},
+                    {&quot;label&quot;: &quot;Reset&quot;, &quot;value&quot;: &quot;reset&quot;}
+                ]
+            )
+        ]
+    ),
+
+    html.Hr(),
+
+    # This table is the main view of the dataset. The filter changes what rows appear here.
+    # The built-in table features help the user search, sort, and page through results.
+    dash_table.DataTable(
+        id=&quot;datatable-id&quot;,
+        columns=[{&quot;name&quot;: i, &quot;id&quot;: i, &quot;deletable&quot;: False, &quot;selectable&quot;: True} for i in df.columns],
+        data=df.to_dict(&quot;records&quot;),
+
+        filter_action=&quot;native&quot;,
+        sort_action=&quot;native&quot;,
+        sort_mode=&quot;multi&quot;,
+        page_action=&quot;native&quot;,
+        page_current=0,
+        page_size=10,
+
+        # Only one row can be selected at a time because the map is showing one animal’s location.
+        # I also select the first row automatically so the map shows something right away.
+        row_selectable=&quot;single&quot;,
+        selected_rows=[0],
+
+        editable=False,
+        column_selectable=&quot;single&quot;,
+        row_deletable=False,
+        selected_columns=[],
+
+        style_table={&quot;overflowX&quot;: &quot;auto&quot;},
+        style_cell={&quot;textAlign&quot;: &quot;left&quot;, &quot;padding&quot;: &quot;6px&quot;, &quot;fontFamily&quot;: &quot;Arial&quot;, &quot;fontSize&quot;: &quot;14px&quot;},
+        style_header={&quot;fontWeight&quot;: &quot;bold&quot;}
+    ),
+
+    html.Br(),
+    html.Hr(),
+
+    # The chart and the map sit side-by-side so the user can see both at the same time.
+    # Both are driven by the data currently visible in the DataTable.
+    html.Div(
+        className=&quot;row&quot;,
+        style={&quot;display&quot;: &quot;flex&quot;, &quot;gap&quot;: &quot;20px&quot;},
+        children=[
+            html.Div(id=&quot;graph-id&quot;, className=&quot;col s12 m6&quot;, style={&quot;flex&quot;: &quot;1&quot;}),
+            html.Div(id=&quot;map-id&quot;, className=&quot;col s12 m6&quot;, style={&quot;flex&quot;: &quot;1&quot;})
+        ]
+    )
+])
+
+
+# Filter definitions (MongoDB query dictionaries) 
+# These queries are the rules for what dogs qualify for each rescue type.
+# The callback below selects one of these queries depending on what the user picks.
+WATER_RESCUE_QUERY = {
+    &quot;animal_type&quot;: &quot;Dog&quot;,
+    &quot;breed&quot;: {&quot;$in&quot;: [&quot;Labrador Retriever Mix&quot;, &quot;Chesapeake Bay Retriever&quot;, &quot;Newfoundland&quot;]},
+    &quot;sex_upon_outcome&quot;: &quot;Intact Female&quot;,
+    &quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26, &quot;$lte&quot;: 156}
+}
+
+MOUNTAIN_RESCUE_QUERY = {
+    &quot;animal_type&quot;: &quot;Dog&quot;,
+    &quot;breed&quot;: {&quot;$in&quot;: [&quot;German Shepherd&quot;, &quot;Alaskan Malamute&quot;, &quot;Old English Sheepdog&quot;, &quot;Siberian Husky&quot;, &quot;Rottweiler&quot;]},
+    &quot;sex_upon_outcome&quot;: &quot;Intact Male&quot;,
+    &quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26, &quot;$lte&quot;: 156}
+}
+
+DISASTER_RESCUE_QUERY = {
+    &quot;animal_type&quot;: &quot;Dog&quot;,
+    &quot;breed&quot;: {&quot;$in&quot;: [&quot;Doberman Pinscher&quot;, &quot;German Shepherd&quot;, &quot;Golden Retriever&quot;, &quot;Bloodhound&quot;, &quot;Rottweiler&quot;]},
+    &quot;sex_upon_outcome&quot;: &quot;Intact Male&quot;,
+    &quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 20, &quot;$lte&quot;: 300}
+}
+
+
+def read_to_df(query: dict) -&gt; pd.DataFrame:
+    &quot;&quot;&quot;
+    This helper function keeps the database reading logic in one place.
+    It runs the query through the CRUD module, converts results into a DataFrame,
+    and removes _id so the dashboard widgets don’t crash on ObjectId.
+    &quot;&quot;&quot;
+    temp = pd.DataFrame.from_records(db.read(query))
+    if &quot;_id&quot; in temp.columns:
+        temp.drop(columns=[&quot;_id&quot;], inplace=True)
+    return temp
+
+#############################################
+# Interaction Between Components / Controller
+#############################################
+
+# When the user changes the filter selection, this callback updates the DataTable.
+# I also reset the selected row to the first item so the map always has a valid row to display.
+@app.callback(
+    Output(&quot;datatable-id&quot;, &quot;data&quot;),
+    Output(&quot;datatable-id&quot;, &quot;selected_rows&quot;),
+    Input(&quot;filter-type&quot;, &quot;value&quot;)
+)
+def update_dashboard(filter_type):
+    # Start with the default “show everything” view.
+    query = {}
+
+    # Pick the correct MongoDB query based on what the user selected.
+    if filter_type == &quot;water&quot;:
+        query = WATER_RESCUE_QUERY
+    elif filter_type == &quot;mountain&quot;:
+        query = MOUNTAIN_RESCUE_QUERY
+    elif filter_type == &quot;disaster&quot;:
+        query = DISASTER_RESCUE_QUERY
+    elif filter_type == &quot;reset&quot;:
+        query = {}
+
+    dff = read_to_df(query)
+
+    # If the filter returns no results, the table should go empty and the map should not select a row.
+    if dff.empty:
+        return [], []
+
+    # If results exist, show them and select the first row so the map updates cleanly.
+    return dff.to_dict(&quot;records&quot;), [0]
+
+
+# This callback builds the chart (I chose a pie chart).
+# It runs off of the table’s current visible data, so it automatically changes with filtering.
+@app.callback(
+    Output(&quot;graph-id&quot;, &quot;children&quot;),
+    Input(&quot;datatable-id&quot;, &quot;derived_virtual_data&quot;)
+)
+def update_graphs(viewData):
+    if viewData is None or len(viewData) == 0:
+        return html.Div(&quot;No data available for chart.&quot;)
+
+    dff = pd.DataFrame.from_records(viewData)
+
+    # If breed doesn’t exist for some reason, the chart can’t be built.
+    if &quot;breed&quot; not in dff.columns:
+        return html.Div(&quot;Chart unavailable: &#x27;breed&#x27; column not found.&quot;)
+
+    # Limit to the top 10 breeds so the pie chart stays readable.
+    breed_counts = dff[&quot;breed&quot;].value_counts().head(10).reset_index()
+    breed_counts.columns = [&quot;breed&quot;, &quot;count&quot;]
+
+    fig = px.pie(
+        breed_counts,
+        names=&quot;breed&quot;,
+        values=&quot;count&quot;,
+        title=&quot;Breed Distribution (Top 10 in Current Filter)&quot;
+    )
+
+    return [dcc.Graph(figure=fig)]
+
+
+# This callback highlights selected columns to make the table easier to read while exploring data.
+@app.callback(
+    Output(&quot;datatable-id&quot;, &quot;style_data_conditional&quot;),
+    Input(&quot;datatable-id&quot;, &quot;selected_columns&quot;)
+)
+def update_styles(selected_columns):
+    if not selected_columns:
+        return []
+
+    return [{
+        &quot;if&quot;: {&quot;column_id&quot;: i},
+        &quot;background_color&quot;: &quot;#D2F3FF&quot;
+    } for i in selected_columns]
+
+
+# This callback updates the map based on the row selected in the table.
+@app.callback(
+    Output(&quot;map-id&quot;, &quot;children&quot;),
+    Input(&quot;datatable-id&quot;, &quot;derived_virtual_data&quot;),
+    Input(&quot;datatable-id&quot;, &quot;derived_virtual_selected_rows&quot;)
+)
+def update_map(viewData, index):
+    # If the table is empty, still show a map centered on Austin so the dashboard doesn’t look broken.
+    if viewData is None or len(viewData) == 0:
+        return [
+            dl.Map(
+                style={&quot;width&quot;: &quot;1000px&quot;, &quot;height&quot;: &quot;500px&quot;},
+                center=[30.75, -97.48],
+                zoom=10,
+                children=[dl.TileLayer(id=&quot;base-layer-id&quot;)]
+            )
+        ]
+
+    dff = pd.DataFrame.from_records(viewData)
+
+    # If nothing is selected, default to the first row.
+    if index is None or len(index) == 0:
+        row = 0
+    else:
+        row = index[0]
+
+    # After filtering, the previous row index could be out of range, so I reset it back to 0.
+    if row &gt;= len(dff):
+        row = 0
+
+    # Use the dataset’s latitude/longitude fields if they exist.
+    # If they don’t exist, use a fallback so the code still runs without crashing.
+    if &quot;location_lat&quot; in dff.columns and &quot;location_long&quot; in dff.columns:
+        lat = dff.loc[dff.index[row], &quot;location_lat&quot;]
+        lon = dff.loc[dff.index[row], &quot;location_long&quot;]
+    else:
+        if dff.shape[1] &lt;= 14:
+            lat, lon = 30.75, -97.48
+        else:
+            lat = dff.iloc[row, 13]
+            lon = dff.iloc[row, 14]
+
+    # Pull breed + name for the tooltip and popup. If missing, show a placeholder.
+    breed = dff.loc[dff.index[row], &quot;breed&quot;] if &quot;breed&quot; in dff.columns else &quot;Unknown Breed&quot;
+    name = dff.loc[dff.index[row], &quot;name&quot;] if &quot;name&quot; in dff.columns else &quot;Unknown Name&quot;
+
+    return [
+        dl.Map(
+            style={&quot;width&quot;: &quot;1000px&quot;, &quot;height&quot;: &quot;500px&quot;},
+            center=[30.75, -97.48],
+            zoom=10,
+            children=[
+                dl.TileLayer(id=&quot;base-layer-id&quot;),
+                dl.Marker(
+                    position=[lat, lon],
+                    children=[
+                        dl.Tooltip(str(breed)),
+                        dl.Popup([
+                            html.H4(&quot;Animal Name&quot;),
+                            html.P(str(name))
+                        ])
+                    ]
+                )
+            ]
+        )
+    ]
+
+
+# Run app and display result in JupyterLab mode
+app.run_server(debug=True)
+
+</code></pre></details></section><section><h2>Enhanced artifact</h2><details><summary>enhanced_artifact/.env.example</summary><pre><code># Copy these names into your shell or a local .env file that is excluded from Git.
+# Never commit real credentials.
+MONGODB_USERNAME=replace_with_database_username
+MONGODB_PASSWORD=replace_with_database_password
+MONGODB_HOST=localhost
+MONGODB_PORT=27017
+MONGODB_DATABASE=aac
+MONGODB_COLLECTION=animals
+MONGODB_AUTH_SOURCE=admin
+
+# Optional application settings
+DASH_HOST=127.0.0.1
+DASH_PORT=8050
+DASH_DEBUG=false
+LOG_LEVEL=INFO
+</code></pre></details>
+<details><summary>enhanced_artifact/.gitignore</summary><pre><code>.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+index_evaluation_results.json
+</code></pre></details>
+<details><summary>enhanced_artifact/README.md</summary><pre><code># Grazioso Salvare Animal Rescue Dashboard Database Enhancement
+
+## Purpose
+
+This directory contains the enhanced version of Alondra Paulino Santos&#x27;s CS 340
+Project Two artifact for the CS 499 database category. The original files remain
+in the parent project directory for before-and-after comparison.
+
+The enhancement preserves the dashboard&#x27;s rescue-filtering purpose while moving
+filtering, sorting, pagination, counting, and breed aggregation into MongoDB.
+Only one requested page is transferred to the interface, while the chart still
+summarizes the complete matching result set.
+
+## Enhanced files
+
+- `animal_shelter.py` provides validated CRUD operations, deterministic database
+  paging, aggregation, error separation, and index-analysis helpers.
+- `dashboard.py` provides the enhanced Dash application and safe user-query
+  translation.
+- `rescue_queries.py` centralizes the approved rescue-category rules shared by
+  the dashboard and performance-evaluation utility.
+- `index_evaluation.py` records existing indexes and comparable execution
+  statistics. It does not create the documented candidate index unless the
+  `--create-candidate` flag is supplied.
+- `assets/GraziosoSalvareLogo.png` provides the original course-project
+  branding as a locally served dashboard asset.
+- `.env.example` documents required configuration names without real secrets.
+- `tests/` contains isolated unit tests that do not modify a live database.
+
+## Security decisions
+
+Real credentials are not stored in source code. The application accepts only
+approved filter and sort fields, translates a limited set of comparison
+operations, caps page sizes, rejects empty update/delete queries, logs technical
+database failures, and provides safe messages to dashboard users.
+
+## Configuration
+
+Set the following environment variables before starting the dashboard:
+
+```text
+MONGODB_USERNAME
+MONGODB_PASSWORD
+MONGODB_HOST
+MONGODB_PORT
+MONGODB_DATABASE
+MONGODB_COLLECTION
+MONGODB_AUTH_SOURCE
+```
+
+Defaults for nonsecret settings appear in `.env.example`. Do not place a real
+password in `.env.example`, the notebook, screenshots, recordings, or Git.
+
+## Install and run
+
+From the `enhanced` directory:
+
+```bash
+python -m pip install -r requirements.txt
+python dashboard.py
+```
+
+Open the local URL shown by Dash. The dashboard presents the original Grazioso
+Salvare course-project logo alongside a readable title and author line.
+
+## Logo provenance
+
+The Grazioso Salvare logo is the original image distributed for the SNHU CS 340
+course artifact. The recovered PNG was verified against two independently
+published copies of the same course project; both copies had the same filename,
+dimensions, file size, and SHA-256 checksum. The asset is stored locally so the
+dashboard does not contact a third-party server while running.
+
+## Tests
+
+Run the isolated test suite from the `enhanced` directory:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The tests cover query boundaries, sort stability, page limiting, identifier
+serialization, aggregation construction, destructive-operation safeguards,
+filter parsing, and coordinate validation. A live MongoDB verification should
+also be performed with the course dataset before final submission.
+
+## Index evaluation
+
+First record the baseline with the current database:
+
+```bash
+python index_evaluation.py --output index_baseline.json
+```
+
+Review the existing indexes and candidate trade-offs. If the candidate is
+appropriate, create it and repeat the identical queries:
+
+```bash
+python index_evaluation.py --create-candidate --output index_candidate.json
+```
+
+Compare returned-record counts, documents examined, keys examined, and execution
+time. Execution time alone can vary between runs, so conclusions should consider
+all measurements and confirm that results remain correct. The candidate index
+uses storage and adds maintenance cost to writes; it should be retained only when
+the measured benefit justifies that cost.
+
+## Live verification checklist
+
+1. Start MongoDB with the Austin Animal Center dataset and a least-privilege user.
+2. Verify All Animals and all three rescue categories.
+3. Apply approved text and numeric column filters.
+4. Sort by one and multiple columns and move through multiple pages.
+5. Confirm that total counts and top-breed statistics use the same criteria.
+6. Verify a successful empty result displays `No animals match`.
+7. Stop MongoDB temporarily and confirm a separate safe failure message appears.
+8. Select animals with valid, missing, and invalid coordinates.
+9. Record baseline and candidate index evidence against the same dataset.
+</code></pre></details>
+<details><summary>enhanced_artifact/animal_shelter.py</summary><pre><code>&quot;&quot;&quot;Secure MongoDB data-access services for the enhanced rescue dashboard.
+
+Author: Alondra Paulino Santos
+Course: CS 499 Computer Science Capstone
+Artifact: CS 340 Grazioso Salvare Animal Rescue Dashboard
+Enhancement category: Databases
+Version: 2.0
+Date: September 30, 2026
+
+Intent and design decisions:
+    This module keeps database responsibilities outside the Dash interface. It
+    validates every dashboard-generated query, performs sorting and pagination
+    in MongoDB, calculates breed summaries with an aggregation pipeline, and
+    exposes index-analysis helpers. Credentials are supplied through environment
+    variables by the application rather than embedded in source code.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import logging
+import math
+from typing import Any, Iterable, Mapping, Sequence
+from urllib.parse import quote_plus
+
+from bson import ObjectId
+from pymongo import ASCENDING, DESCENDING, MongoClient
+from pymongo.collection import Collection
+from pymongo.errors import PyMongoError
+
+
+LOGGER = logging.getLogger(__name__)
+
+MAX_PAGE_SIZE = 100
+DEFAULT_PAGE_SIZE = 10
+
+# The dashboard may query only these known dataset fields. Keeping this list at
+# the data boundary prevents arbitrary field and operator injection.
+ALLOWED_FILTER_FIELDS = {
+    &quot;animal_id&quot;,
+    &quot;animal_type&quot;,
+    &quot;breed&quot;,
+    &quot;color&quot;,
+    &quot;name&quot;,
+    &quot;outcome_type&quot;,
+    &quot;sex_upon_outcome&quot;,
+    &quot;age_upon_outcome_in_weeks&quot;,
+}
+
+ALLOWED_SORT_FIELDS = ALLOWED_FILTER_FIELDS | {&quot;datetime&quot;, &quot;monthyear&quot;, &quot;_id&quot;}
+ALLOWED_COMPARISON_OPERATORS = {&quot;$eq&quot;, &quot;$ne&quot;, &quot;$gt&quot;, &quot;$gte&quot;, &quot;$lt&quot;, &quot;$lte&quot;, &quot;$in&quot;}
+
+# A projection limits network transfer to information the enhanced dashboard
+# displays or uses. MongoDB&#x27;s _id remains available as a stable tie-breaker.
+DASHBOARD_PROJECTION = {
+    &quot;animal_id&quot;: 1,
+    &quot;animal_type&quot;: 1,
+    &quot;breed&quot;: 1,
+    &quot;color&quot;: 1,
+    &quot;name&quot;: 1,
+    &quot;outcome_type&quot;: 1,
+    &quot;sex_upon_outcome&quot;: 1,
+    &quot;age_upon_outcome_in_weeks&quot;: 1,
+    &quot;location_lat&quot;: 1,
+    &quot;location_long&quot;: 1,
+}
+
+
+class DatabaseOperationError(RuntimeError):
+    &quot;&quot;&quot;Represent a database failure without exposing connection details to UI code.&quot;&quot;&quot;
+
+
+@dataclass(frozen=True)
+class PageResult:
+    &quot;&quot;&quot;One database page plus the metadata required by the dashboard.&quot;&quot;&quot;
+
+    records: list[dict[str, Any]]
+    total_count: int
+    page_number: int
+    page_size: int
+
+    @property
+    def page_count(self) -&gt; int:
+        &quot;&quot;&quot;Return the number of available pages, including zero for no matches.&quot;&quot;&quot;
+
+        return math.ceil(self.total_count / self.page_size) if self.total_count else 0
+
+
+def _require_non_empty_text(value: Any, name: str) -&gt; str:
+    &quot;&quot;&quot;Validate required configuration while keeping messages free of secrets.&quot;&quot;&quot;
+
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f&quot;{name} must be a non-empty string.&quot;)
+    return value.strip()
+
+
+def _validate_scalar(value: Any, field: str) -&gt; Any:
+    &quot;&quot;&quot;Allow predictable BSON-safe scalar values for dashboard filters.&quot;&quot;&quot;
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    raise ValueError(f&quot;Unsupported value type for filter field &#x27;{field}&#x27;.&quot;)
+
+
+def validate_query(query: Mapping[str, Any] | None) -&gt; dict[str, Any]:
+    &quot;&quot;&quot;Return a defensive copy of an allow-listed dashboard query.
+
+    Rescue rules and user filters are joined with ``$and``. Nested ``$and`` is
+    therefore allowed, but user-supplied top-level database operators are not.
+    Each field may contain a scalar equality value or a small, approved set of
+    comparison operators.
+    &quot;&quot;&quot;
+
+    if query is None:
+        return {}
+    if not isinstance(query, Mapping):
+        raise ValueError(&quot;Query must be a mapping.&quot;)
+
+    # Build a new dictionary instead of mutating or trusting the caller&#x27;s data.
+    # This ensures that only values examined by this function reach PyMongo.
+    validated: dict[str, Any] = {}
+    for field, condition in query.items():
+        if field == &quot;$and&quot;:
+            # The dashboard joins the selected rescue category and optional
+            # column filters with $and. Each nested part is validated again.
+            if not isinstance(condition, Sequence) or isinstance(condition, (str, bytes)):
+                raise ValueError(&quot;$and must contain a sequence of query mappings.&quot;)
+            validated[&quot;$and&quot;] = [validate_query(part) for part in condition]
+            continue
+
+        if field not in ALLOWED_FILTER_FIELDS:
+            raise ValueError(f&quot;Filtering by &#x27;{field}&#x27; is not permitted.&quot;)
+
+        if isinstance(condition, Mapping):
+            # A condition such as {&quot;$gte&quot;: 26} must use an approved comparison
+            # operator. Database scripting and raw regex operators are rejected.
+            safe_condition: dict[str, Any] = {}
+            for operator, value in condition.items():
+                if operator not in ALLOWED_COMPARISON_OPERATORS:
+                    raise ValueError(f&quot;Operator &#x27;{operator}&#x27; is not permitted.&quot;)
+                if operator == &quot;$in&quot;:
+                    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+                        raise ValueError(&quot;$in requires a list of values.&quot;)
+                    safe_condition[operator] = [_validate_scalar(item, field) for item in value]
+                else:
+                    safe_condition[operator] = _validate_scalar(value, field)
+            validated[field] = safe_condition
+        else:
+            validated[field] = _validate_scalar(condition, field)
+    return validated
+
+
+def validate_sort(sort: Sequence[tuple[str, int]] | None) -&gt; list[tuple[str, int]]:
+    &quot;&quot;&quot;Validate sort fields and append ``_id`` for deterministic pagination.&quot;&quot;&quot;
+
+    # Rebuild the sort specification so a browser request cannot inject an
+    # arbitrary database field or unsupported sort value.
+    normalized: list[tuple[str, int]] = []
+    for field, direction in sort or []:
+        if field not in ALLOWED_SORT_FIELDS:
+            raise ValueError(f&quot;Sorting by &#x27;{field}&#x27; is not permitted.&quot;)
+        if direction not in (ASCENDING, DESCENDING):
+            raise ValueError(&quot;Sort direction must be ascending or descending.&quot;)
+        if field != &quot;_id&quot;:
+            normalized.append((field, direction))
+
+    # Stable ordering prevents records with equal values from moving between
+    # pages while a user browses the same result set.
+    normalized.append((&quot;_id&quot;, ASCENDING))
+    return normalized
+
+
+def serialize_document(document: Mapping[str, Any]) -&gt; dict[str, Any]:
+    &quot;&quot;&quot;Convert BSON-only values to dashboard-safe representations.&quot;&quot;&quot;
+
+    serialized = dict(document)
+    if &quot;_id&quot; in serialized:
+        serialized[&quot;_id&quot;] = str(serialized[&quot;_id&quot;])
+    return serialized
+
+
+class AnimalShelter:
+    &quot;&quot;&quot;Provide validated CRUD, paging, aggregation, and index operations.&quot;&quot;&quot;
+
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        host: str = &quot;localhost&quot;,
+        port: int = 27017,
+        database_name: str = &quot;aac&quot;,
+        collection_name: str = &quot;animals&quot;,
+        auth_source: str = &quot;admin&quot;,
+        *,
+        client: MongoClient | None = None,
+        connect_timeout_ms: int = 5000,
+    ) -&gt; None:
+        &quot;&quot;&quot;Connect to MongoDB or accept an injected client for isolated tests.&quot;&quot;&quot;
+
+        username = _require_non_empty_text(username, &quot;MongoDB username&quot;)
+        password = _require_non_empty_text(password, &quot;MongoDB password&quot;)
+        host = _require_non_empty_text(host, &quot;MongoDB host&quot;)
+        database_name = _require_non_empty_text(database_name, &quot;Database name&quot;)
+        collection_name = _require_non_empty_text(collection_name, &quot;Collection name&quot;)
+        auth_source = _require_non_empty_text(auth_source, &quot;Authentication source&quot;)
+        if not isinstance(port, int) or not 1 &lt;= port &lt;= 65535:
+            raise ValueError(&quot;MongoDB port must be between 1 and 65535.&quot;)
+
+        try:
+            if client is None:
+                # quote_plus protects reserved URI characters in credentials.
+                # The completed URI is never logged or returned to the browser.
+                uri = (
+                    f&quot;mongodb://{quote_plus(username)}:{quote_plus(password)}@&quot;
+                    f&quot;{host}:{port}/?authSource={quote_plus(auth_source)}&quot;
+                )
+                client = MongoClient(uri, serverSelectionTimeoutMS=connect_timeout_ms)
+            # Selecting the database and collection here keeps those connection
+            # details out of the dashboard&#x27;s presentation logic.
+            self.client = client
+            self.database = self.client[database_name]
+            self.collection: Collection = self.database[collection_name]
+            # Ping fails fast during startup instead of waiting for the first
+            # user action to reveal an authentication or connectivity problem.
+            self.client.admin.command(&quot;ping&quot;)
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;MongoDB connection failed.&quot;)
+            raise DatabaseOperationError(&quot;The database connection could not be established.&quot;) from exc
+
+    def close(self) -&gt; None:
+        &quot;&quot;&quot;Release the MongoDB client&#x27;s network resources.&quot;&quot;&quot;
+
+        self.client.close()
+
+    def create(self, data: Mapping[str, Any]) -&gt; str:
+        &quot;&quot;&quot;Insert one non-empty document and return its identifier.&quot;&quot;&quot;
+
+        if not isinstance(data, Mapping) or not data:
+            raise ValueError(&quot;Create data must be a non-empty mapping.&quot;)
+        try:
+            result = self.collection.insert_one(dict(data))
+            return str(result.inserted_id)
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Create operation failed.&quot;)
+            raise DatabaseOperationError(&quot;The record could not be created.&quot;) from exc
+
+    def read(self, query: Mapping[str, Any] | None = None) -&gt; list[dict[str, Any]]:
+        &quot;&quot;&quot;Read validated records for compatibility with the original artifact.&quot;&quot;&quot;
+
+        safe_query = validate_query(query)
+        try:
+            return [serialize_document(item) for item in self.collection.find(safe_query)]
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Read operation failed.&quot;)
+            raise DatabaseOperationError(&quot;The records could not be loaded.&quot;) from exc
+
+    def find_page(
+        self,
+        query: Mapping[str, Any] | None,
+        *,
+        page_number: int = 0,
+        page_size: int = DEFAULT_PAGE_SIZE,
+        sort: Sequence[tuple[str, int]] | None = None,
+        projection: Mapping[str, int] | None = None,
+    ) -&gt; PageResult:
+        &quot;&quot;&quot;Return one deterministically sorted MongoDB page and total count.&quot;&quot;&quot;
+
+        if not isinstance(page_number, int) or page_number &lt; 0:
+            raise ValueError(&quot;Page number must be a nonnegative integer.&quot;)
+        if not isinstance(page_size, int) or not 1 &lt;= page_size &lt;= MAX_PAGE_SIZE:
+            raise ValueError(f&quot;Page size must be between 1 and {MAX_PAGE_SIZE}.&quot;)
+
+        # Validate every user-influenced value before constructing the cursor.
+        safe_query = validate_query(query)
+        safe_sort = validate_sort(sort)
+        safe_projection = dict(projection or DASHBOARD_PROJECTION)
+        safe_projection[&quot;_id&quot;] = 1
+
+        try:
+            # Count uses the same filter as the page query. The interface uses
+            # this number to calculate pages and describe the complete result.
+            total_count = self.collection.count_documents(safe_query)
+            page_count = math.ceil(total_count / page_size) if total_count else 0
+            # A filter change can make the browser&#x27;s previous page invalid.
+            # Returning to page zero produces a useful, predictable result.
+            safe_page = page_number if page_count == 0 or page_number &lt; page_count else 0
+            # MongoDB performs sorting, skipping, and limiting before documents
+            # cross the network, so the browser receives one requested page.
+            cursor = (
+                self.collection.find(safe_query, safe_projection)
+                .sort(safe_sort)
+                .skip(safe_page * page_size)
+                .limit(page_size)
+            )
+            records = [serialize_document(item) for item in cursor]
+            return PageResult(records, total_count, safe_page, page_size)
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Paged read operation failed.&quot;)
+            raise DatabaseOperationError(&quot;The requested page could not be loaded.&quot;) from exc
+
+    def aggregate_breed_counts(
+        self, query: Mapping[str, Any] | None, limit: int = 10
+    ) -&gt; list[dict[str, Any]]:
+        &quot;&quot;&quot;Summarize breeds across every matching record, not one table page.&quot;&quot;&quot;
+
+        if not isinstance(limit, int) or not 1 &lt;= limit &lt;= 50:
+            raise ValueError(&quot;Aggregation limit must be between 1 and 50.&quot;)
+        safe_query = validate_query(query)
+        # This pipeline deliberately repeats the table&#x27;s validated filter. It
+        # summarizes all matching animals, not only the current table page.
+        pipeline = [
+            {&quot;$match&quot;: safe_query},
+            {&quot;$match&quot;: {&quot;breed&quot;: {&quot;$ne&quot;: None}}},
+            {&quot;$group&quot;: {&quot;_id&quot;: &quot;$breed&quot;, &quot;count&quot;: {&quot;$sum&quot;: 1}}},
+            {&quot;$sort&quot;: {&quot;count&quot;: -1, &quot;_id&quot;: 1}},
+            {&quot;$limit&quot;: limit},
+            {&quot;$project&quot;: {&quot;_id&quot;: 0, &quot;breed&quot;: &quot;$_id&quot;, &quot;count&quot;: 1}},
+        ]
+        try:
+            return list(self.collection.aggregate(pipeline))
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Breed aggregation failed.&quot;)
+            raise DatabaseOperationError(&quot;Breed statistics could not be loaded.&quot;) from exc
+
+    def update(self, query: Mapping[str, Any], new_values: Mapping[str, Any]) -&gt; int:
+        &quot;&quot;&quot;Update matching records while rejecting an accidental update-all call.&quot;&quot;&quot;
+
+        safe_query = validate_query(query)
+        if not safe_query:
+            raise ValueError(&quot;Update requires a non-empty query.&quot;)
+        if not isinstance(new_values, Mapping) or not new_values:
+            raise ValueError(&quot;Update values must be a non-empty mapping.&quot;)
+        # Restrict updates to the predictable $set operation. Replacement and
+        # scripting-style updates are outside this artifact&#x27;s requirements.
+        if set(new_values) != {&quot;$set&quot;} or not isinstance(new_values[&quot;$set&quot;], Mapping):
+            raise ValueError(&quot;Only a non-empty $set update is permitted.&quot;)
+        if not new_values[&quot;$set&quot;]:
+            raise ValueError(&quot;$set must include at least one field.&quot;)
+        try:
+            return self.collection.update_many(safe_query, dict(new_values)).modified_count
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Update operation failed.&quot;)
+            raise DatabaseOperationError(&quot;The records could not be updated.&quot;) from exc
+
+    def delete(self, query: Mapping[str, Any]) -&gt; int:
+        &quot;&quot;&quot;Delete matching records while rejecting an accidental delete-all call.&quot;&quot;&quot;
+
+        safe_query = validate_query(query)
+        if not safe_query:
+            raise ValueError(&quot;Delete requires a non-empty query.&quot;)
+        try:
+            return self.collection.delete_many(safe_query).deleted_count
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Delete operation failed.&quot;)
+            raise DatabaseOperationError(&quot;The records could not be deleted.&quot;) from exc
+
+    def list_indexes(self) -&gt; list[dict[str, Any]]:
+        &quot;&quot;&quot;Return current index metadata so evaluation starts from evidence.&quot;&quot;&quot;
+
+        try:
+            return list(self.collection.list_indexes())
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Index inspection failed.&quot;)
+            raise DatabaseOperationError(&quot;Indexes could not be inspected.&quot;) from exc
+
+    def create_index(self, keys: Iterable[tuple[str, int]], name: str) -&gt; str:
+        &quot;&quot;&quot;Create one reviewed compound index; this is never called automatically.&quot;&quot;&quot;
+
+        # Index creation is an explicit evaluation action, never an automatic
+        # side effect of starting the public dashboard.
+        key_list = list(keys)
+        if not key_list:
+            raise ValueError(&quot;An index requires at least one field.&quot;)
+        for field, direction in key_list:
+            if field not in ALLOWED_SORT_FIELDS or direction not in (ASCENDING, DESCENDING):
+                raise ValueError(&quot;Index specification contains an unsupported field or direction.&quot;)
+        try:
+            return self.collection.create_index(key_list, name=name)
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Index creation failed.&quot;)
+            raise DatabaseOperationError(&quot;The index could not be created.&quot;) from exc
+
+    def explain_find(
+        self,
+        query: Mapping[str, Any] | None,
+        sort: Sequence[tuple[str, int]] | None = None,
+    ) -&gt; dict[str, Any]:
+        &quot;&quot;&quot;Return execution statistics for repeatable before-and-after evaluation.&quot;&quot;&quot;
+
+        safe_query = validate_query(query)
+        safe_sort = validate_sort(sort)
+        try:
+            # executionStats supplies returned, examined-document, examined-key,
+            # and timing evidence for the same query before and after indexing.
+            command = {
+                &quot;explain&quot;: {
+                    &quot;find&quot;: self.collection.name,
+                    &quot;filter&quot;: safe_query,
+                    &quot;sort&quot;: dict(safe_sort),
+                    &quot;limit&quot;: DEFAULT_PAGE_SIZE,
+                },
+                &quot;verbosity&quot;: &quot;executionStats&quot;,
+            }
+            return self.database.command(command)
+        except PyMongoError as exc:
+            LOGGER.exception(&quot;Query explanation failed.&quot;)
+            raise DatabaseOperationError(&quot;Query statistics could not be collected.&quot;) from exc
+</code></pre></details>
+<details><summary>enhanced_artifact/dashboard.py</summary><pre><code>&quot;&quot;&quot;Enhanced Dash interface for the Grazioso Salvare rescue database.
+
+Author: Alondra Paulino Santos
+Course: CS 499 Computer Science Capstone
+Artifact: CS 340 Grazioso Salvare Animal Rescue Dashboard
+Enhancement category: Databases
+Version: 2.0
+Date: September 30, 2026
+
+Enhancement summary:
+    The original interface loaded every matching MongoDB document before the
+    browser paged and sorted the results. This version sends validated filters,
+    sorting, and page requests to MongoDB. It also requests a database-wide
+    breed aggregation for the chart, preserves display-safe record identifiers,
+    validates coordinates, distinguishes no matches from database failures, and
+    reads connection settings from the environment instead of source code.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import logging
+import math
+import os
+import re
+from typing import Any, Mapping
+
+import dash_leaflet as dl
+from dash import Dash, Input, Output, State, callback, dash_table, dcc, html
+import plotly.express as px
+from pymongo import ASCENDING, DESCENDING
+
+from animal_shelter import (
+    MAX_PAGE_SIZE,
+    AnimalShelter,
+    DatabaseOperationError,
+)
+from rescue_queries import RESCUE_QUERIES
+
+
+logging.basicConfig(level=os.getenv(&quot;LOG_LEVEL&quot;, &quot;INFO&quot;))
+LOGGER = logging.getLogger(__name__)
+
+DEFAULT_CENTER = [30.2672, -97.7431]
+DEFAULT_PAGE_SIZE = 10
+
+DISPLAY_COLUMNS = [
+    &quot;animal_id&quot;,
+    &quot;name&quot;,
+    &quot;animal_type&quot;,
+    &quot;breed&quot;,
+    &quot;color&quot;,
+    &quot;sex_upon_outcome&quot;,
+    &quot;age_upon_outcome_in_weeks&quot;,
+    &quot;outcome_type&quot;,
+]
+
+FILTERABLE_COLUMNS = set(DISPLAY_COLUMNS)
+NUMERIC_COLUMNS = {&quot;age_upon_outcome_in_weeks&quot;}
+
+def load_database() -&gt; AnimalShelter:
+    &quot;&quot;&quot;Create the data service from required environment configuration.&quot;&quot;&quot;
+
+    # Secret values are read at runtime. They are not assigned defaults because
+    # a placeholder credential could hide a deployment configuration mistake.
+    username = os.getenv(&quot;MONGODB_USERNAME&quot;)
+    password = os.getenv(&quot;MONGODB_PASSWORD&quot;)
+    if not username or not password:
+        raise RuntimeError(
+            &quot;Set MONGODB_USERNAME and MONGODB_PASSWORD before starting the dashboard.&quot;
+        )
+
+    try:
+        port = int(os.getenv(&quot;MONGODB_PORT&quot;, &quot;27017&quot;))
+    except ValueError as exc:
+        raise RuntimeError(&quot;MONGODB_PORT must be an integer.&quot;) from exc
+
+    # Nonsecret connection settings have documented local-development defaults.
+    return AnimalShelter(
+        username=username,
+        password=password,
+        host=os.getenv(&quot;MONGODB_HOST&quot;, &quot;localhost&quot;),
+        port=port,
+        database_name=os.getenv(&quot;MONGODB_DATABASE&quot;, &quot;aac&quot;),
+        collection_name=os.getenv(&quot;MONGODB_COLLECTION&quot;, &quot;animals&quot;),
+        auth_source=os.getenv(&quot;MONGODB_AUTH_SOURCE&quot;, &quot;admin&quot;),
+    )
+
+
+def combine_queries(*queries: Mapping[str, Any]) -&gt; dict[str, Any]:
+    &quot;&quot;&quot;Combine non-empty query parts without silently overwriting conditions.&quot;&quot;&quot;
+
+    # $and preserves conditions when the rescue rule and a user filter target
+    # the same field; dictionary merging could silently overwrite one of them.
+    parts = [dict(query) for query in queries if query]
+    if not parts:
+        return {}
+    if len(parts) == 1:
+        return parts[0]
+    return {&quot;$and&quot;: parts}
+
+
+def _coerce_filter_value(field: str, raw_value: str) -&gt; Any:
+    &quot;&quot;&quot;Convert approved numeric filter values while leaving text as text.&quot;&quot;&quot;
+
+    # Dash includes surrounding quotes for text filters. Removing only the
+    # outer quote characters leaves the intended literal value for MongoDB.
+    value = raw_value.strip().strip(&#x27;&quot;&#x27;).strip(&quot;&#x27;&quot;)
+    if len(value) &gt; 100:
+        raise ValueError(&quot;Filter values may not exceed 100 characters.&quot;)
+    if field in NUMERIC_COLUMNS:
+        try:
+            return float(value)
+        except ValueError as exc:
+            raise ValueError(f&quot;{field} requires a numeric value.&quot;) from exc
+    return value
+
+
+FILTER_EXPRESSION = re.compile(
+    r&quot;^\{(?P&lt;field&gt;[A-Za-z0-9_]+)\}\s*&quot;
+    r&quot;(?P&lt;operator&gt;eq|ne|ge|le|gt|lt|=|!=|&gt;=|&lt;=|&gt;|&lt;)\s*&quot;
+    r&quot;(?P&lt;value&gt;.+)$&quot;
+)
+
+OPERATOR_MAP = {
+    &quot;eq&quot;: &quot;$eq&quot;,
+    &quot;=&quot;: &quot;$eq&quot;,
+    &quot;ne&quot;: &quot;$ne&quot;,
+    &quot;!=&quot;: &quot;$ne&quot;,
+    &quot;ge&quot;: &quot;$gte&quot;,
+    &quot;&gt;=&quot;: &quot;$gte&quot;,
+    &quot;le&quot;: &quot;$lte&quot;,
+    &quot;&lt;=&quot;: &quot;$lte&quot;,
+    &quot;gt&quot;: &quot;$gt&quot;,
+    &quot;&gt;&quot;: &quot;$gt&quot;,
+    &quot;lt&quot;: &quot;$lt&quot;,
+    &quot;&lt;&quot;: &quot;$lt&quot;,
+}
+
+
+def parse_table_filter(filter_query: str | None) -&gt; dict[str, Any]:
+    &quot;&quot;&quot;Translate Dash filter expressions into an allow-listed MongoDB query.
+
+    Dash joins column expressions with ``&amp;&amp;``. This parser intentionally
+    supports comparison operations only. It does not accept raw JSON, regular
+    expressions, JavaScript, or MongoDB operators from the browser.
+    &quot;&quot;&quot;
+
+    if not filter_query or not filter_query.strip():
+        return {}
+
+    # Parse each expression individually instead of accepting browser-provided
+    # JSON. That creates a narrow, explainable boundary for database access.
+    conditions: list[dict[str, Any]] = []
+    for expression in filter_query.split(&quot; &amp;&amp; &quot;):
+        match = FILTER_EXPRESSION.fullmatch(expression.strip())
+        if not match:
+            raise ValueError(
+                &quot;Use filters such as {breed} eq &#x27;Labrador Retriever Mix&#x27; or &quot;
+                &quot;{age_upon_outcome_in_weeks} ge 26.&quot;
+            )
+        # Field and operation checks happen before the value becomes a query.
+        field = match.group(&quot;field&quot;)
+        if field not in FILTERABLE_COLUMNS:
+            raise ValueError(f&quot;Filtering by &#x27;{field}&#x27; is not available.&quot;)
+        value = _coerce_filter_value(field, match.group(&quot;value&quot;))
+        conditions.append({field: {OPERATOR_MAP[match.group(&quot;operator&quot;)]: value}})
+
+    return conditions[0] if len(conditions) == 1 else {&quot;$and&quot;: conditions}
+
+
+def parse_sort(sort_by: list[dict[str, str]] | None) -&gt; list[tuple[str, int]]:
+    &quot;&quot;&quot;Translate Dash sort selections into validated PyMongo directions.&quot;&quot;&quot;
+
+    # DataTable reports human-readable directions; PyMongo uses 1 and -1.
+    parsed: list[tuple[str, int]] = []
+    for item in sort_by or []:
+        column = item.get(&quot;column_id&quot;)
+        if column not in FILTERABLE_COLUMNS:
+            raise ValueError(f&quot;Sorting by &#x27;{column}&#x27; is not available.&quot;)
+        direction = ASCENDING if item.get(&quot;direction&quot;) == &quot;asc&quot; else DESCENDING
+        parsed.append((column, direction))
+    return parsed
+
+
+def valid_coordinates(record: Mapping[str, Any]) -&gt; tuple[float, float] | None:
+    &quot;&quot;&quot;Return verified latitude and longitude or ``None`` for invalid data.&quot;&quot;&quot;
+
+    # Conversion rejects missing fields and nonnumeric strings before the map
+    # component sees them.
+    try:
+        latitude = float(record[&quot;location_lat&quot;])
+        longitude = float(record[&quot;location_long&quot;])
+    except (KeyError, TypeError, ValueError):
+        return None
+    # Finite and geographic-range checks prevent NaN, infinity, or impossible
+    # coordinates from producing a misleading marker.
+    if not (math.isfinite(latitude) and math.isfinite(longitude)):
+        return None
+    if not (-90 &lt;= latitude &lt;= 90 and -180 &lt;= longitude &lt;= 180):
+        return None
+    return latitude, longitude
+
+
+try:
+    database = load_database()
+    STARTUP_ERROR = &quot;&quot;
+except (RuntimeError, ValueError) as exc:
+    # Missing or malformed local configuration is actionable and expected in a
+    # newly copied project, so it is logged without an unnecessary traceback.
+    LOGGER.warning(&quot;Dashboard configuration is incomplete: %s&quot;, exc)
+    database = None
+    STARTUP_ERROR = &quot;Database access is unavailable. Check the server configuration.&quot;
+except DatabaseOperationError:
+    # The page can still load and explain the configuration problem without
+    # displaying credentials, host details, or a Python traceback to the user.
+    LOGGER.exception(&quot;Dashboard database initialization failed.&quot;)
+    database = None
+    STARTUP_ERROR = &quot;Database access is unavailable. Check the server configuration.&quot;
+
+
+app = Dash(__name__)
+app.title = &quot;Grazioso Salvare Animal Rescue Dashboard&quot;
+
+app.layout = html.Div(
+    style={&quot;fontFamily&quot;: &quot;Arial, sans-serif&quot;, &quot;padding&quot;: &quot;24px&quot;, &quot;maxWidth&quot;: &quot;1500px&quot;, &quot;margin&quot;: &quot;auto&quot;},
+    children=[
+        # Dash serves project images from the assets directory. Keeping the
+        # logo local avoids a runtime dependency on an external website, while
+        # alternative text preserves the header&#x27;s meaning for screen readers.
+        html.Header(
+            style={
+                &quot;display&quot;: &quot;flex&quot;,
+                &quot;alignItems&quot;: &quot;center&quot;,
+                &quot;gap&quot;: &quot;22px&quot;,
+                &quot;flexWrap&quot;: &quot;wrap&quot;,
+            },
+            children=[
+                html.Img(
+                    src=app.get_asset_url(&quot;GraziosoSalvareLogo.png&quot;),
+                    alt=&quot;Grazioso Salvare logo featuring a stylized rescue dog&quot;,
+                    style={&quot;width&quot;: &quot;120px&quot;, &quot;height&quot;: &quot;120px&quot;, &quot;objectFit&quot;: &quot;contain&quot;},
+                ),
+                html.Div(
+                    [
+                        html.H1(
+                            &quot;Grazioso Salvare Animal Rescue Dashboard&quot;,
+                            style={&quot;margin&quot;: &quot;0 0 0.35rem&quot;},
+                        ),
+                        html.P(
+                            &quot;Enhanced CS 340 database artifact by Alondra Paulino Santos&quot;,
+                            style={&quot;margin&quot;: &quot;0&quot;},
+                        ),
+                    ]
+                ),
+            ],
+        ),
+        html.Hr(),
+        html.H3(&quot;Rescue Category&quot;),
+        dcc.RadioItems(
+            id=&quot;filter-type&quot;,
+            value=&quot;reset&quot;,
+            inline=True,
+            options=[
+                {&quot;label&quot;: &quot;Water Rescue&quot;, &quot;value&quot;: &quot;water&quot;},
+                {&quot;label&quot;: &quot;Mountain / Wilderness Rescue&quot;, &quot;value&quot;: &quot;mountain&quot;},
+                {&quot;label&quot;: &quot;Disaster / Individual Tracking&quot;, &quot;value&quot;: &quot;disaster&quot;},
+                {&quot;label&quot;: &quot;All Animals&quot;, &quot;value&quot;: &quot;reset&quot;},
+            ],
+        ),
+        html.P(
+            &quot;Column-filter examples: {breed} eq &#x27;German Shepherd&#x27; or &quot;
+            &quot;{age_upon_outcome_in_weeks} ge 26&quot;,
+            style={&quot;color&quot;: &quot;#555&quot;, &quot;fontSize&quot;: &quot;0.9rem&quot;},
+        ),
+        html.Div(id=&quot;status-message&quot;, role=&quot;status&quot;, style={&quot;padding&quot;: &quot;10px 0&quot;, &quot;fontWeight&quot;: &quot;bold&quot;}),
+        dcc.Store(id=&quot;breed-count-store&quot;, data=[]),
+        dash_table.DataTable(
+            id=&quot;datatable-id&quot;,
+            columns=[{&quot;name&quot;: field.replace(&quot;_&quot;, &quot; &quot;).title(), &quot;id&quot;: field} for field in DISPLAY_COLUMNS],
+            data=[],
+            filter_action=&quot;custom&quot;,
+            filter_query=&quot;&quot;,
+            sort_action=&quot;custom&quot;,
+            sort_mode=&quot;multi&quot;,
+            sort_by=[],
+            page_action=&quot;custom&quot;,
+            page_current=0,
+            page_size=DEFAULT_PAGE_SIZE,
+            page_count=0,
+            row_selectable=&quot;single&quot;,
+            selected_rows=[],
+            editable=False,
+            style_table={&quot;overflowX&quot;: &quot;auto&quot;},
+            style_cell={&quot;textAlign&quot;: &quot;left&quot;, &quot;padding&quot;: &quot;7px&quot;, &quot;fontFamily&quot;: &quot;Arial&quot;, &quot;fontSize&quot;: &quot;14px&quot;},
+            style_header={&quot;fontWeight&quot;: &quot;bold&quot;, &quot;backgroundColor&quot;: &quot;#E8EEF4&quot;},
+        ),
+        html.Br(),
+        html.Div(
+            style={&quot;display&quot;: &quot;flex&quot;, &quot;gap&quot;: &quot;24px&quot;, &quot;flexWrap&quot;: &quot;wrap&quot;},
+            children=[
+                html.Div(id=&quot;graph-id&quot;, style={&quot;flex&quot;: &quot;1 1 500px&quot;}),
+                html.Div(id=&quot;map-id&quot;, style={&quot;flex&quot;: &quot;1 1 500px&quot;}),
+            ],
+        ),
+    ],
+)
+
+
+@callback(
+    Output(&quot;datatable-id&quot;, &quot;data&quot;),
+    Output(&quot;datatable-id&quot;, &quot;page_count&quot;),
+    Output(&quot;datatable-id&quot;, &quot;page_current&quot;),
+    Output(&quot;datatable-id&quot;, &quot;selected_rows&quot;),
+    Output(&quot;breed-count-store&quot;, &quot;data&quot;),
+    Output(&quot;status-message&quot;, &quot;children&quot;),
+    Input(&quot;filter-type&quot;, &quot;value&quot;),
+    Input(&quot;datatable-id&quot;, &quot;filter_query&quot;),
+    Input(&quot;datatable-id&quot;, &quot;sort_by&quot;),
+    Input(&quot;datatable-id&quot;, &quot;page_current&quot;),
+    Input(&quot;datatable-id&quot;, &quot;page_size&quot;),
+)
+def update_dashboard(
+    rescue_type: str,
+    filter_query: str,
+    sort_by: list[dict[str, str]],
+    page_current: int,
+    page_size: int,
+):
+    &quot;&quot;&quot;Retrieve one page and matching aggregate statistics from MongoDB.&quot;&quot;&quot;
+
+    # A missing connection leaves the page usable and produces a safe status
+    # message instead of allowing the callback to raise an uncaught exception.
+    if database is None:
+        return [], 0, 0, [], [], STARTUP_ERROR
+
+    try:
+        # Convert interface choices into one database query, then use that exact
+        # query for the table page and the breed summary.
+        rescue_query = RESCUE_QUERIES.get(rescue_type, {})
+        user_query = parse_table_filter(filter_query)
+        combined_query = combine_queries(rescue_query, user_query)
+        # find_page performs count, sort, skip, and limit in MongoDB.
+        result = database.find_page(
+            combined_query,
+            page_number=page_current or 0,
+            page_size=page_size or DEFAULT_PAGE_SIZE,
+            sort=parse_sort(sort_by),
+        )
+        breed_counts = database.aggregate_breed_counts(combined_query)
+    except ValueError as exc:
+        return [], 0, 0, [], [], f&quot;Invalid filter or paging option: {exc}&quot;
+    except DatabaseOperationError:
+        return [], 0, 0, [], [], &quot;Animal records could not be loaded. Please try again.&quot;
+
+    # A successful empty result is intentionally different from the database
+    # failure handled above, giving the user an accurate explanation.
+    if result.total_count == 0:
+        return [], 0, 0, [], breed_counts, &quot;No animals match the selected criteria.&quot;
+
+    status = (
+        f&quot;Showing page {result.page_number + 1} of {result.page_count}; &quot;
+        f&quot;{result.total_count:,} matching animals.&quot;
+    )
+    return (
+        result.records,
+        result.page_count,
+        result.page_number,
+        [0] if result.records else [],
+        breed_counts,
+        status,
+    )
+
+
+@callback(Output(&quot;graph-id&quot;, &quot;children&quot;), Input(&quot;breed-count-store&quot;, &quot;data&quot;))
+def update_graph(breed_counts: list[dict[str, Any]]):
+    &quot;&quot;&quot;Render MongoDB&#x27;s aggregate summary for the complete filtered result.&quot;&quot;&quot;
+
+    if not breed_counts:
+        return html.P(&quot;No breed statistics are available for the selected criteria.&quot;)
+    # The server already returned ordered aggregate results, so this callback
+    # only turns the database summary into a readable horizontal bar chart.
+    figure = px.bar(
+        breed_counts,
+        x=&quot;count&quot;,
+        y=&quot;breed&quot;,
+        orientation=&quot;h&quot;,
+        title=&quot;Top Breeds Across All Matching Animals&quot;,
+        labels={&quot;count&quot;: &quot;Animals&quot;, &quot;breed&quot;: &quot;Breed&quot;},
+    )
+    figure.update_layout(yaxis={&quot;categoryorder&quot;: &quot;total ascending&quot;})
+    return dcc.Graph(figure=figure)
+
+
+@callback(
+    Output(&quot;map-id&quot;, &quot;children&quot;),
+    Input(&quot;datatable-id&quot;, &quot;data&quot;),
+    Input(&quot;datatable-id&quot;, &quot;selected_rows&quot;),
+)
+def update_map(records: list[dict[str, Any]], selected_rows: list[int]):
+    &quot;&quot;&quot;Display the selected animal only when its coordinates are supported.&quot;&quot;&quot;
+
+    map_children: list[Any] = [dl.TileLayer(id=&quot;base-layer-id&quot;)]
+    center = DEFAULT_CENTER
+    message = &quot;Select an animal with valid coordinates to display its location.&quot;
+
+    if records:
+        # Filtering or paging can invalidate an earlier selection. Defaulting
+        # to row zero connects the marker to a record on the displayed page.
+        row = selected_rows[0] if selected_rows and selected_rows[0] &lt; len(records) else 0
+        record = records[row]
+        coordinates = valid_coordinates(record)
+        if coordinates:
+            # A marker is created only from coordinates validated above. The
+            # application never invents a location for an incomplete record.
+            latitude, longitude = coordinates
+            center = [latitude, longitude]
+            breed = str(record.get(&quot;breed&quot;) or &quot;Unknown breed&quot;)
+            name = str(record.get(&quot;name&quot;) or &quot;Unnamed animal&quot;)
+            map_children.append(
+                dl.Marker(
+                    position=center,
+                    children=[dl.Tooltip(breed), dl.Popup([html.H4(name), html.P(breed)])],
+                )
+            )
+            message = &quot;&quot;
+        else:
+            message = &quot;The selected animal does not have valid map coordinates.&quot;
+
+    return html.Div(
+        [
+            html.P(message) if message else None,
+            dl.Map(
+                center=center,
+                zoom=10,
+                children=map_children,
+                style={&quot;width&quot;: &quot;100%&quot;, &quot;height&quot;: &quot;500px&quot;},
+            ),
+        ]
+    )
+
+
+if __name__ == &quot;__main__&quot;:
+    # Debug mode is configurable and disabled by default for safer execution.
+    debug_enabled = os.getenv(&quot;DASH_DEBUG&quot;, &quot;false&quot;).lower() == &quot;true&quot;
+    app.run(debug=debug_enabled, host=os.getenv(&quot;DASH_HOST&quot;, &quot;127.0.0.1&quot;), port=int(os.getenv(&quot;DASH_PORT&quot;, &quot;8050&quot;)))
+</code></pre></details>
+<details><summary>enhanced_artifact/index_baseline.json</summary><pre><code>{
+  &quot;candidate_created_for_this_run&quot;: false,
+  &quot;candidate_name&quot;: &quot;rescue_filter_compound_v1&quot;,
+  &quot;candidate_fields&quot;: [
+    [
+      &quot;animal_type&quot;,
+      1
+    ],
+    [
+      &quot;sex_upon_outcome&quot;,
+      1
+    ],
+    [
+      &quot;age_upon_outcome_in_weeks&quot;,
+      1
+    ],
+    [
+      &quot;breed&quot;,
+      1
+    ]
+  ],
+  &quot;existing_indexes_before_run&quot;: [
+    {
+      &quot;v&quot;: 2,
+      &quot;key&quot;: {
+        &quot;_id&quot;: 1
+      },
+      &quot;name&quot;: &quot;_id_&quot;
+    }
+  ],
+  &quot;existing_indexes_after_run&quot;: [
+    {
+      &quot;v&quot;: 2,
+      &quot;key&quot;: {
+        &quot;_id&quot;: 1
+      },
+      &quot;name&quot;: &quot;_id_&quot;
+    }
+  ],
+  &quot;query_execution_statistics&quot;: {
+    &quot;water&quot;: {
+      &quot;n_returned&quot;: 10,
+      &quot;execution_time_ms&quot;: 16,
+      &quot;total_keys_examined&quot;: 0,
+      &quot;total_documents_examined&quot;: 10000
+    },
+    &quot;mountain&quot;: {
+      &quot;n_returned&quot;: 5,
+      &quot;execution_time_ms&quot;: 6,
+      &quot;total_keys_examined&quot;: 0,
+      &quot;total_documents_examined&quot;: 10000
+    },
+    &quot;disaster&quot;: {
+      &quot;n_returned&quot;: 4,
+      &quot;execution_time_ms&quot;: 5,
+      &quot;total_keys_examined&quot;: 0,
+      &quot;total_documents_examined&quot;: 10000
+    }
+  },
+  &quot;trade_off_note&quot;: &quot;The candidate may reduce reads for rescue filters, but every additional index consumes storage and adds maintenance work to inserts and updates.&quot;
+}</code></pre></details>
+<details><summary>enhanced_artifact/index_candidate.json</summary><pre><code>{
+  &quot;candidate_created_for_this_run&quot;: true,
+  &quot;candidate_name&quot;: &quot;rescue_filter_compound_v1&quot;,
+  &quot;candidate_fields&quot;: [
+    [
+      &quot;animal_type&quot;,
+      1
+    ],
+    [
+      &quot;sex_upon_outcome&quot;,
+      1
+    ],
+    [
+      &quot;age_upon_outcome_in_weeks&quot;,
+      1
+    ],
+    [
+      &quot;breed&quot;,
+      1
+    ]
+  ],
+  &quot;existing_indexes_before_run&quot;: [
+    {
+      &quot;v&quot;: 2,
+      &quot;key&quot;: {
+        &quot;_id&quot;: 1
+      },
+      &quot;name&quot;: &quot;_id_&quot;
+    }
+  ],
+  &quot;existing_indexes_after_run&quot;: [
+    {
+      &quot;v&quot;: 2,
+      &quot;key&quot;: {
+        &quot;_id&quot;: 1
+      },
+      &quot;name&quot;: &quot;_id_&quot;
+    },
+    {
+      &quot;v&quot;: 2,
+      &quot;key&quot;: {
+        &quot;animal_type&quot;: 1,
+        &quot;sex_upon_outcome&quot;: 1,
+        &quot;age_upon_outcome_in_weeks&quot;: 1,
+        &quot;breed&quot;: 1
+      },
+      &quot;name&quot;: &quot;rescue_filter_compound_v1&quot;
+    }
+  ],
+  &quot;query_execution_statistics&quot;: {
+    &quot;water&quot;: {
+      &quot;n_returned&quot;: 10,
+      &quot;execution_time_ms&quot;: 4,
+      &quot;total_keys_examined&quot;: 200,
+      &quot;total_documents_examined&quot;: 17
+    },
+    &quot;mountain&quot;: {
+      &quot;n_returned&quot;: 5,
+      &quot;execution_time_ms&quot;: 0,
+      &quot;total_keys_examined&quot;: 272,
+      &quot;total_documents_examined&quot;: 5
+    },
+    &quot;disaster&quot;: {
+      &quot;n_returned&quot;: 4,
+      &quot;execution_time_ms&quot;: 0,
+      &quot;total_keys_examined&quot;: 389,
+      &quot;total_documents_examined&quot;: 4
+    }
+  },
+  &quot;trade_off_note&quot;: &quot;The candidate may reduce reads for rescue filters, but every additional index consumes storage and adds maintenance work to inserts and updates.&quot;
+}</code></pre></details>
+<details><summary>enhanced_artifact/index_evaluation.py</summary><pre><code>&quot;&quot;&quot;Collect repeatable MongoDB index evidence for the CS 499 enhancement.
+
+Author: Alondra Paulino Santos
+Version: 2.0
+Date: September 30, 2026
+
+This script never creates an index unless ``--create-candidate`` is supplied.
+Run it once for a baseline, review the candidate against the actual dataset,
+then run it with the flag and compare the generated execution statistics.
+&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+from pymongo import ASCENDING
+
+from animal_shelter import AnimalShelter
+from rescue_queries import RESCUE_QUERIES
+
+
+CANDIDATE_INDEX = [
+    (&quot;animal_type&quot;, ASCENDING),
+    (&quot;sex_upon_outcome&quot;, ASCENDING),
+    (&quot;age_upon_outcome_in_weeks&quot;, ASCENDING),
+    (&quot;breed&quot;, ASCENDING),
+]
+CANDIDATE_NAME = &quot;rescue_filter_compound_v1&quot;
+
+
+def _execution_summary(explanation: dict[str, Any]) -&gt; dict[str, Any]:
+    &quot;&quot;&quot;Keep the comparable execution figures and omit verbose server details.&quot;&quot;&quot;
+
+    stats = explanation.get(&quot;executionStats&quot;, {})
+    return {
+        &quot;n_returned&quot;: stats.get(&quot;nReturned&quot;),
+        &quot;execution_time_ms&quot;: stats.get(&quot;executionTimeMillis&quot;),
+        &quot;total_keys_examined&quot;: stats.get(&quot;totalKeysExamined&quot;),
+        &quot;total_documents_examined&quot;: stats.get(&quot;totalDocsExamined&quot;),
+    }
+
+
+def configured_database() -&gt; AnimalShelter:
+    &quot;&quot;&quot;Build the same environment-configured connection used by the dashboard.&quot;&quot;&quot;
+
+    return AnimalShelter(
+        username=os.environ[&quot;MONGODB_USERNAME&quot;],
+        password=os.environ[&quot;MONGODB_PASSWORD&quot;],
+        host=os.getenv(&quot;MONGODB_HOST&quot;, &quot;localhost&quot;),
+        port=int(os.getenv(&quot;MONGODB_PORT&quot;, &quot;27017&quot;)),
+        database_name=os.getenv(&quot;MONGODB_DATABASE&quot;, &quot;aac&quot;),
+        collection_name=os.getenv(&quot;MONGODB_COLLECTION&quot;, &quot;animals&quot;),
+        auth_source=os.getenv(&quot;MONGODB_AUTH_SOURCE&quot;, &quot;admin&quot;),
+    )
+
+
+def main() -&gt; None:
+    &quot;&quot;&quot;Inspect indexes, optionally create one candidate, and save comparable evidence.&quot;&quot;&quot;
+
+    parser = argparse.ArgumentParser(description=&quot;Evaluate a reviewed rescue-query index.&quot;)
+    parser.add_argument(
+        &quot;--create-candidate&quot;,
+        action=&quot;store_true&quot;,
+        help=&quot;Create the documented compound-index candidate before collecting statistics.&quot;,
+    )
+    parser.add_argument(
+        &quot;--output&quot;,
+        default=&quot;index_evaluation_results.json&quot;,
+        help=&quot;Path for the evidence file.&quot;,
+    )
+    args = parser.parse_args()
+
+    # Reuse the same configuration and data-access class as the dashboard so
+    # the evaluation reflects the deployed collection and validation rules.
+    database = configured_database()
+    try:
+        # Preserve the starting index inventory. This prevents an unsupported
+        # claim that the original collection had no useful indexes.
+        existing_before = database.list_indexes()
+        if args.create_candidate:
+            # Creation is intentionally opt-in after baseline evidence is saved.
+            database.create_index(CANDIDATE_INDEX, CANDIDATE_NAME)
+
+        evaluations = {}
+        for category in (&quot;water&quot;, &quot;mountain&quot;, &quot;disaster&quot;):
+            # All categories use the same sorting and limit so before-and-after
+            # statistics remain comparable.
+            explanation = database.explain_find(
+                RESCUE_QUERIES[category],
+                sort=[(&quot;age_upon_outcome_in_weeks&quot;, ASCENDING)],
+            )
+            evaluations[category] = _execution_summary(explanation)
+
+        # The JSON output records measurements and the design trade-off together,
+        # making the final performance claim auditable in the ePortfolio.
+        evidence = {
+            &quot;candidate_created_for_this_run&quot;: args.create_candidate,
+            &quot;candidate_name&quot;: CANDIDATE_NAME,
+            &quot;candidate_fields&quot;: CANDIDATE_INDEX,
+            &quot;existing_indexes_before_run&quot;: existing_before,
+            &quot;existing_indexes_after_run&quot;: database.list_indexes(),
+            &quot;query_execution_statistics&quot;: evaluations,
+            &quot;trade_off_note&quot;: (
+                &quot;The candidate may reduce reads for rescue filters, but every additional &quot;
+                &quot;index consumes storage and adds maintenance work to inserts and updates.&quot;
+            ),
+        }
+        Path(args.output).write_text(json.dumps(evidence, indent=2, default=str), encoding=&quot;utf-8&quot;)
+        print(f&quot;Index evidence written to {args.output}&quot;)
+    finally:
+        database.close()
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre></details>
+<details><summary>enhanced_artifact/requirements.txt</summary><pre><code>dash&gt;=2.17,&lt;4
+dash-leaflet&gt;=1.0,&lt;2
+plotly&gt;=5.22,&lt;7
+pymongo&gt;=4.7,&lt;5
+numpy&gt;=2.0,&lt;3
+pandas&gt;=2.2,&lt;4
+</code></pre></details>
+<details><summary>enhanced_artifact/rescue_queries.py</summary><pre><code>&quot;&quot;&quot;Approved rescue-category query definitions shared by the application tools.
+
+Author: Alondra Paulino Santos
+Version: 2.0
+Date: September 30, 2026
+
+Keeping these definitions outside the user interface lets the dashboard and the
+index-evaluation utility execute identical queries without importing one another
+or creating an unnecessary database connection.
+&quot;&quot;&quot;
+
+from typing import Any
+
+
+# These dictionaries preserve the rescue rules from the original CS 340
+# artifact. The enhanced version changes where and how they are executed: they
+# now participate in validated, paged queries and full-result aggregation.
+RESCUE_QUERIES: dict[str, dict[str, Any]] = {
+    &quot;reset&quot;: {},
+    &quot;water&quot;: {
+        &quot;animal_type&quot;: &quot;Dog&quot;,
+        &quot;breed&quot;: {
+            &quot;$in&quot;: [
+                &quot;Labrador Retriever Mix&quot;,
+                &quot;Chesapeake Bay Retriever&quot;,
+                &quot;Newfoundland&quot;,
+            ]
+        },
+        &quot;sex_upon_outcome&quot;: &quot;Intact Female&quot;,
+        &quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26, &quot;$lte&quot;: 156},
+    },
+    &quot;mountain&quot;: {
+        &quot;animal_type&quot;: &quot;Dog&quot;,
+        &quot;breed&quot;: {
+            &quot;$in&quot;: [
+                &quot;German Shepherd&quot;,
+                &quot;Alaskan Malamute&quot;,
+                &quot;Old English Sheepdog&quot;,
+                &quot;Siberian Husky&quot;,
+                &quot;Rottweiler&quot;,
+            ]
+        },
+        &quot;sex_upon_outcome&quot;: &quot;Intact Male&quot;,
+        &quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26, &quot;$lte&quot;: 156},
+    },
+    &quot;disaster&quot;: {
+        &quot;animal_type&quot;: &quot;Dog&quot;,
+        &quot;breed&quot;: {
+            &quot;$in&quot;: [
+                &quot;Doberman Pinscher&quot;,
+                &quot;German Shepherd&quot;,
+                &quot;Golden Retriever&quot;,
+                &quot;Bloodhound&quot;,
+                &quot;Rottweiler&quot;,
+            ]
+        },
+        &quot;sex_upon_outcome&quot;: &quot;Intact Male&quot;,
+        &quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 20, &quot;$lte&quot;: 300},
+    },
+}
+</code></pre></details>
+<details><summary>enhanced_artifact/tests/test_animal_shelter.py</summary><pre><code>&quot;&quot;&quot;Unit tests for validation, paging, aggregation, and destructive safeguards.&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import unittest
+from unittest.mock import MagicMock
+
+from bson import ObjectId
+from pymongo import ASCENDING, DESCENDING
+
+from animal_shelter import (
+    DASHBOARD_PROJECTION,
+    AnimalShelter,
+    PageResult,
+    serialize_document,
+    validate_query,
+    validate_sort,
+)
+
+
+class AnimalShelterTests(unittest.TestCase):
+    &quot;&quot;&quot;Exercise enhancement logic without requiring a live MongoDB server.&quot;&quot;&quot;
+
+    def setUp(self) -&gt; None:
+        self.collection = MagicMock()
+        self.database = MagicMock()
+        self.service = AnimalShelter.__new__(AnimalShelter)
+        self.service.collection = self.collection
+        self.service.database = self.database
+        self.service.client = MagicMock()
+
+    def test_query_allows_expected_rescue_conditions(self) -&gt; None:
+        query = {
+            &quot;$and&quot;: [
+                {&quot;animal_type&quot;: &quot;Dog&quot;},
+                {&quot;breed&quot;: {&quot;$in&quot;: [&quot;Newfoundland&quot;, &quot;Bloodhound&quot;]}},
+                {&quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26, &quot;$lte&quot;: 156}},
+            ]
+        }
+        self.assertEqual(validate_query(query), query)
+
+    def test_query_rejects_unapproved_fields_and_operators(self) -&gt; None:
+        with self.assertRaises(ValueError):
+            validate_query({&quot;password&quot;: &quot;secret&quot;})
+        with self.assertRaises(ValueError):
+            validate_query({&quot;breed&quot;: {&quot;$where&quot;: &quot;malicious&quot;}})
+
+    def test_sort_adds_unique_identifier_tie_breaker(self) -&gt; None:
+        self.assertEqual(
+            validate_sort([(&quot;breed&quot;, DESCENDING)]),
+            [(&quot;breed&quot;, DESCENDING), (&quot;_id&quot;, ASCENDING)],
+        )
+
+    def test_find_page_limits_work_in_database_and_serializes_id(self) -&gt; None:
+        document_id = ObjectId()
+        cursor = MagicMock()
+        cursor.sort.return_value = cursor
+        cursor.skip.return_value = cursor
+        cursor.limit.return_value = [{&quot;_id&quot;: document_id, &quot;breed&quot;: &quot;Newfoundland&quot;}]
+        self.collection.find.return_value = cursor
+        self.collection.count_documents.return_value = 21
+
+        result = self.service.find_page(
+            {&quot;animal_type&quot;: &quot;Dog&quot;}, page_number=1, page_size=10, sort=[(&quot;breed&quot;, ASCENDING)]
+        )
+
+        self.assertIsInstance(result, PageResult)
+        self.assertEqual(result.total_count, 21)
+        self.assertEqual(result.page_count, 3)
+        self.assertEqual(result.page_number, 1)
+        self.assertEqual(result.records[0][&quot;_id&quot;], str(document_id))
+        cursor.skip.assert_called_once_with(10)
+        cursor.limit.assert_called_once_with(10)
+        projection = dict(DASHBOARD_PROJECTION)
+        projection[&quot;_id&quot;] = 1
+        self.collection.find.assert_called_once_with({&quot;animal_type&quot;: &quot;Dog&quot;}, projection)
+
+    def test_invalid_page_returns_to_first_page(self) -&gt; None:
+        cursor = MagicMock()
+        cursor.sort.return_value = cursor
+        cursor.skip.return_value = cursor
+        cursor.limit.return_value = []
+        self.collection.find.return_value = cursor
+        self.collection.count_documents.return_value = 5
+
+        result = self.service.find_page({}, page_number=9, page_size=10)
+        self.assertEqual(result.page_number, 0)
+        cursor.skip.assert_called_once_with(0)
+
+    def test_aggregation_uses_match_group_sort_limit_and_projection(self) -&gt; None:
+        expected = [{&quot;breed&quot;: &quot;Labrador Retriever Mix&quot;, &quot;count&quot;: 12}]
+        self.collection.aggregate.return_value = expected
+        result = self.service.aggregate_breed_counts({&quot;animal_type&quot;: &quot;Dog&quot;})
+        self.assertEqual(result, expected)
+
+        pipeline = self.collection.aggregate.call_args.args[0]
+        self.assertEqual(pipeline[0], {&quot;$match&quot;: {&quot;animal_type&quot;: &quot;Dog&quot;}})
+        self.assertIn(&quot;$group&quot;, pipeline[2])
+        self.assertEqual(pipeline[4], {&quot;$limit&quot;: 10})
+
+    def test_update_and_delete_reject_empty_queries(self) -&gt; None:
+        with self.assertRaises(ValueError):
+            self.service.update({}, {&quot;$set&quot;: {&quot;name&quot;: &quot;Test&quot;}})
+        with self.assertRaises(ValueError):
+            self.service.delete({})
+
+    def test_serialize_document_preserves_identifier_as_text(self) -&gt; None:
+        document_id = ObjectId()
+        result = serialize_document({&quot;_id&quot;: document_id, &quot;name&quot;: &quot;Teddy&quot;})
+        self.assertEqual(result, {&quot;_id&quot;: str(document_id), &quot;name&quot;: &quot;Teddy&quot;})
+
+
+if __name__ == &quot;__main__&quot;:
+    unittest.main()
+</code></pre></details>
+<details><summary>enhanced_artifact/tests/test_dashboard_logic.py</summary><pre><code>&quot;&quot;&quot;Unit tests for safe filter translation and map-coordinate validation.&quot;&quot;&quot;
+
+from __future__ import annotations
+
+import os
+import unittest
+from unittest.mock import patch
+
+# Placeholder configuration and a mocked service keep module import isolated
+# from MongoDB while allowing the dashboard&#x27;s pure helper functions to be tested.
+with patch.dict(
+    os.environ,
+    {&quot;MONGODB_USERNAME&quot;: &quot;test-user&quot;, &quot;MONGODB_PASSWORD&quot;: &quot;test-password&quot;},
+):
+    with patch(&quot;animal_shelter.AnimalShelter&quot;):
+        import dashboard
+
+
+class DashboardLogicTests(unittest.TestCase):
+    def test_combines_rescue_and_user_filters(self) -&gt; None:
+        combined = dashboard.combine_queries(
+            {&quot;animal_type&quot;: &quot;Dog&quot;}, {&quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26}}
+        )
+        self.assertEqual(combined[&quot;$and&quot;][0], {&quot;animal_type&quot;: &quot;Dog&quot;})
+        self.assertEqual(
+            combined[&quot;$and&quot;][1], {&quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26}}
+        )
+
+    def test_parses_approved_text_and_numeric_filters(self) -&gt; None:
+        query = dashboard.parse_table_filter(
+            &quot;{breed} eq &#x27;German Shepherd&#x27; &amp;&amp; {age_upon_outcome_in_weeks} ge 26&quot;
+        )
+        self.assertEqual(query[&quot;$and&quot;][0], {&quot;breed&quot;: {&quot;$eq&quot;: &quot;German Shepherd&quot;}})
+        self.assertEqual(
+            query[&quot;$and&quot;][1], {&quot;age_upon_outcome_in_weeks&quot;: {&quot;$gte&quot;: 26.0}}
+        )
+
+    def test_rejects_unapproved_filter_field(self) -&gt; None:
+        with self.assertRaises(ValueError):
+            dashboard.parse_table_filter(&quot;{password} eq &#x27;secret&#x27;&quot;)
+
+    def test_coordinate_validation(self) -&gt; None:
+        self.assertEqual(
+            dashboard.valid_coordinates({&quot;location_lat&quot;: 30.25, &quot;location_long&quot;: -97.75}),
+            (30.25, -97.75),
+        )
+        self.assertIsNone(
+            dashboard.valid_coordinates({&quot;location_lat&quot;: 130, &quot;location_long&quot;: -97.75})
+        )
+        self.assertIsNone(dashboard.valid_coordinates({&quot;name&quot;: &quot;No location&quot;}))
+
+
+if __name__ == &quot;__main__&quot;:
+    unittest.main()
+</code></pre></details></section><section><h2>Supporting files and test data</h2><details><summary>PUBLICATION_NOTE.md</summary><pre><code># Publication Note
+
+The original CS 340 notebook is included for before-and-after comparison. Its classroom MongoDB password was replaced with `REDACTED_BEFORE_PUBLICATION` in this public portfolio copy. The original local artifact was not altered.
+
+The enhanced artifact uses environment-based configuration through `.env.example` and does not store operational credentials in source code.
+</code></pre></details></section></main><footer><div class="container">© Alondra Paulino Santos · CS 499 Computer Science Capstone</div></footer></body></html>
